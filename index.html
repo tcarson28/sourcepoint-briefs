@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>SourcePoint — Intelligence Briefs</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Open+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{height:100%;width:100%;overflow:hidden}
+body{font-family:'Open Sans',sans-serif;background:#F0F2F5}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border-radius:3px}
+textarea:focus,input:focus{outline:none!important;border-color:#0056A8!important;box-shadow:0 0 0 2px rgba(0,86,168,0.1)!important}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/javascript">
+const {useState,useEffect,useRef,useCallback} = React;
+
+const STANDARD_PKG = {founder:1200,corporate:3500,friendsFamily:900,returning:950};
+const COORD_MIN = 500;
+const ADDON_RATES = {
+  founder:{preShipmentInspection:350,factoryAudit:750,qcDocumentation:250,outOfProvince:175,additionalSiteVisit:100},
+  corporate:{preShipmentInspection:900,factoryAudit:2000,qcDocumentation:700,outOfProvince:200,additionalSiteVisit:200}
+};
+const CATEGORY_ADDON_RATES = {
+  founder:{standard:500,moderate:700,complex:900},
+  returning:{standard:400,moderate:550,complex:700},
+  corporate:{standard:1000,moderate:1500,complex:2000}
+};
+const BRAND_RATES = {websitePMFee:800,techPackSimple:300,techPackComplex:1500,productLaunchPartnership:4000};
+
+const PKG_MODULES = [
+  {label:"Supplier Search",desc:"Identify and longlist qualified manufacturers"},
+  {label:"Supplier Vetting",desc:"3 suppliers vetted on the ground, includes 1 site visit within Guangdong Province"},
+  {label:"Price Benchmarking and Negotiation",desc:"Mandarin-language negotiation with all 3 suppliers"},
+  {label:"Bilingual Spec Sheet and Product Rendering",desc:"1 master document distributed to all 3 factories"},
+  {label:"Sample Coordination",desc:"2 suppliers selected for sample rounds"},
+  {label:"Supplier Recommendation Report",desc:"1 final supplier recommended for production"},
+];
+const ADDON_META = [
+  {id:"preShipmentInspection",label:"Pre-Shipment Inspection",desc:"On-site inspection before goods ship"},
+  {id:"factoryAudit",label:"Factory Audit",desc:"Full on-site capability and risk evaluation"},
+  {id:"qcDocumentation",label:"QC Documentation",desc:"Formal spec-by-spec inspection report"},
+  {id:"additionalSiteVisit",label:"Additional Site Visit (Guangdong)",desc:"Each visit beyond the one included in the package"},
+  {id:"outOfProvince",label:"Out-of-Province Travel Supplement",desc:"Factory outside Guangdong Province"},
+];
+const BRAND_META = [
+  {id:"websitePMFee",label:"Website Development PM Fee",desc:"Active weekly oversight for 4-week Shopify build"},
+  {id:"techPackSimple",label:"Tech Pack Simple",desc:"Simple garment or product"},
+  {id:"techPackComplex",label:"Tech Pack Complex",desc:"Multi-component or technical product"},
+  {id:"productLaunchPartnership",label:"Product Launch Partnership",desc:"Full 3-phase launch engagement approx 5 months"},
+];
+
+const ANALYSIS_SYS = `You are SourcePoint's internal intelligence analyst. SourcePoint is a U.S.-founded, China-based product sourcing consultancy. Analyze all provided inputs and produce a structured client intelligence brief.
+
+Required inputs before a proposal can be generated:
+1. Product being sourced
+2. Quantity
+3. Key specifications
+4. Budget per unit
+5. Delivery destination
+6. Timeline or urgency
+7. Client relationship type: cold, referral, or returning
+8. Branding requirements: unbranded, custom logo, or open
+
+COMPLEXITY SCORING (internal use only, determines category add-on tier):
+Score each factor present and total the points.
+- Multiple product categories, 2 points per additional category beyond the first
+- Sample pulls from more than one factory: 1 point
+- Inspection coordination required: 1 point
+- Multiple SKUs within a single category: 1 point
+- Multi-phase program structure: 1 point
+- Custom branding requiring bilingual spec sheet development: 1 point
+- Timeline under three weeks from engagement start to order placement: 1 point
+- Product development or prototype development: 2 points
+- Legal coordination required: 1 point
+- Jewelry or precision metalwork category: 1 point (elevated factory vetting, finish consistency risk, IP exposure on branded insignia)
+- Electronics or tech-integrated product category: 1 point (certification requirements, component sourcing, safety testing)
+Tier thresholds: 0 to 2 points = Standard. 3 to 4 points = Moderate. 5 or above = Complex.
+
+SKU GROUPING RULE (critical): Multiple SKUs within the same product category must be grouped as ONE category row, not as separate categories. A pin program with five SKUs is one category with multiple SKUs. A harness in three colorways is one category. Only create separate category rows when products require different factories, different supplier searches, or different spec sheet development tracks. Never split SKUs into separate category rows.
+
+Output ONLY this JSON with prefix ANALYSIS_COMPLETE: on its own line:
+
+ANALYSIS_COMPLETE:
+{"clientName":"","company":"","product":"","quantity":"","specifications":"","budgetPerUnit":"","destination":"","timeline":"","tier":"founder","relationshipType":"cold","currentSituation":"2-4 sentences about where client is now","statedGoals":[{"text":"goal one"},{"text":"goal two"}],"productCategories":[{"category":"category name e.g. Milestone Pin Program","addonTier":"standard","skus":[{"sku":"sku name e.g. 50 Year Pin","quantity":"units or range","phase":"Phase 1","notes":"any relevant detail"}]}],"informationGaps":[{"field":"missing input name","question":"question to ask","blocking":true}],"upsellOpportunities":[{"service":"module name","rationale":"why needed","priority":"high"}],"proposalStatus":"blocked","proposalBlockers":[],"complexityScore":0,"complexityTier":"standard","modules":{"includePackage":true,"preShipmentInspection":false,"factoryAudit":false,"qcDocumentation":false,"outOfProvince":false,"isRush":false,"websitePMFee":false,"techPackSimple":false,"techPackComplex":false,"productLaunchPartnership":false},"analystNotes":""}
+
+Rules: blocking true only for the 8 required inputs. proposalStatus ready only when all 8 confirmed. tier is corporate if established organization with procurement function or order above 75000 USD, otherwise founder. statedGoals must always be an array of objects with a text field, never a plain string. SKU GROUPING RULE: multiple SKUs within the same product type must be grouped into ONE productCategories entry, never listed as separate categories. Example: five pin designs are one entry labeled Milestone Pin Program (5 SKUs) not five separate entries. Jewelry and precision metalwork engagements carry elevated complexity due to specialized factory pools, finish consistency requirements across SKUs, and IP exposure risk. Score these engagements at complex tier unless scope is clearly minimal. productCategories must use the nested structure with category name and skus array. Each SKU must have sku name, quantity, phase, and notes fields. Group all SKUs of the same product type under one category entry. If quantities are not mentioned for a category, leave the quantity field as an empty string. complexityScore is the sum of all complexity factor points present including jewelry and electronics factors where applicable. complexityTier is standard for 0 to 2, moderate for 3 to 4, complex for 5 or above. analystNotes must always be populated with 2 to 4 sentences covering: buying signals or hesitation observed, red flags or risks, upsell potential not already captured, and any strategic observations that would inform how to handle this engagement. Output only JSON.`;
+
+const PROPOSAL_SYS = `You are SourcePoint's senior sourcing operator. Generate a complete client-ready sourcing proposal.
+
+SourcePoint: U.S.-founded, China-based sourcing consultancy. Founder: Taylor Carson. Website: sourcepointco.com. Email: hello@sourcepointco.com.
+
+Standard Sourcing Package includes: Supplier search, vetting of 3 suppliers, price benchmarking and negotiation in Mandarin, bilingual spec sheet and product rendering, sample coordination for 2 suppliers, formal supplier recommendation report.
+
+CURRENT FEE SCHEDULE:
+Founder standard package: 1200. Returning client package: 950. Corporate package: 3500. Rush supplement: 25 percent added to base package fee for engagements under 21 days.
+Additional category pricing per category beyond the first: Founder standard 500, moderate 700, complex 900. Returning standard 400, moderate 550, complex 700. Corporate standard 1000, moderate 1500, complex 2000.
+Coordination fee: 10 percent of confirmed order value plus shipping. Minimum 500 total. Split evenly across Stage 3 and Stage 4. Product cost and freight are pass-through payments and do not appear in sourcing fee or coordination fee calculations.
+
+PAYMENT STRUCTURE (4 stages):
+Stage 1: 50 percent of total sourcing fee due at proposal acceptance.
+Stage 2: Remaining 50 percent of sourcing fee due at sample approval and sourcing phase close.
+Stage 3: 50 percent of coordination fee (5 percent of confirmed order value plus shipping) due at production coordination start.
+Stage 4: Remaining 50 percent of coordination fee (5 percent of confirmed order value plus shipping) due prior to full order shipping.
+
+Generate the proposal as clean plain text with numbered section headers in ALL CAPS. No markdown symbols. No dashes of any kind anywhere including em dashes, en dashes, or hyphens used as punctuation. Use commas or rewrite instead.
+
+Sections: 1. INTRODUCTION 2. GOALS AND PRIORITIES 3. PROPOSED SCOPE OF WORK TIMELINE AND DELIVERABLES 4. PRODUCT SPECIFICATIONS 5. COST STRUCTURE 6. PAYMENT TERMS 7. SCOPE NOTES 8. WHY SOURCEPOINT 9. ACCEPTANCE AND NEXT STEPS
+
+Section 4 PRODUCT SPECIFICATIONS must render the PRODUCT CATEGORIES TABLE as a plain text table. Column headers are: Category | SKU | Quantity | Phase | Notes. For each category, print the category name in the Category column. For the first SKU under a category, print the category name and the SKU details. For subsequent SKUs under the same category, leave the Category column blank and print the SKU details. Separate columns with the pipe character. Each SKU on its own line. Include every category and every SKU from the data. Do not omit any. Do not add any. Do not include Add-on Tier in the table. If no product categories are provided, write NOT YET CONFIRMED in that section.
+
+Rules: Operator tone. Calm and direct. No hype. Fill every field with real data from the brief. Payment Terms section must describe all four stages clearly. Cost Structure must show coordination fee as 10 percent of order value plus shipping with minimum 500, collected in two equal installments at Stages 3 and 4. End with: SourcePoint | U.S.-Founded. China-Based. Real Factory Access.`;
+
+const fmt = (n) => '$' + Number(n||0).toLocaleString();
+const uid = () => Date.now().toString(36) + Math.random().toString(36).substr(2,5);
+const dateFmt = (iso) => new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+const fmtSize = (b) => b<1048576?Math.round(b/1024)+'KB':(b/1048576).toFixed(1)+'MB';
+
+const normaliseGoals = (raw) => {
+  if(!raw) return [];
+  if(Array.isArray(raw)) return raw.map(g=>typeof g==='string'?{id:uid(),text:g}:{id:uid(),...g});
+  if(typeof raw==='string'&&raw.trim()) return [{id:uid(),text:raw.trim()}];
+  return [];
+};
+
+const extractJSON = (text) => {
+  const idx = text.indexOf('ANALYSIS_COMPLETE:');
+  if(idx===-1) return null;
+  const after = text.substring(idx+18).trim();
+  const start = after.indexOf('{');
+  if(start===-1) return null;
+  let depth=0,end=-1;
+  for(let i=start;i<after.length;i++){
+    if(after[i]==='{') depth++;
+    else if(after[i]==='}'){depth--;if(depth===0){end=i;break;}}
+  }
+  if(end===-1) return null;
+  try{return JSON.parse(after.substring(start,end+1));}catch{return null;}
+};
+
+const calcPricing = (tier,mods,rel) => {
+  const r = ADDON_RATES[tier||'founder'];
+  const lines=[]; let sub=0;
+  const add=(label,amt,detail)=>{lines.push({label,amt,detail:detail||''});sub+=amt;};
+  if(mods.includePackage){
+    const p = tier==='corporate'?STANDARD_PKG.corporate:rel==='returning'?STANDARD_PKG.returning:STANDARD_PKG.founder;
+    const detail = rel==='returning'?'Returning client rate':tier==='corporate'?'Corporate rate':'Founder rate';
+    add('Standard Sourcing Package',p,detail);
+    if(mods.isRush){add('Rush Supplement 25 percent',Math.round(p*0.25),'');}
+  }
+  if(mods.preShipmentInspection) add('Pre-Shipment Inspection',r.preShipmentInspection,'');
+  if(mods.factoryAudit) add('Factory Audit',r.factoryAudit,'');
+  if(mods.qcDocumentation) add('QC Documentation',r.qcDocumentation,'');
+  if(mods.additionalSiteVisit){const qty=Math.max(1,parseInt(mods.additionalSiteVisitCount)||1);add('Additional Site Visit x'+qty+' (Guangdong)',r.additionalSiteVisit*qty,qty+' visit'+(qty!==1?'s':'')+' beyond included visit');}
+  if(mods.outOfProvince) add('Out-of-Province Travel Supplement',r.outOfProvince,'');
+  if(mods.websitePMFee) add('Website Development PM Fee',BRAND_RATES.websitePMFee,'');
+  if(mods.techPackSimple) add('Tech Pack Simple',BRAND_RATES.techPackSimple,'');
+  if(mods.techPackComplex) add('Tech Pack Complex',BRAND_RATES.techPackComplex,'');
+  if(mods.productLaunchPartnership) add('Product Launch Partnership',BRAND_RATES.productLaunchPartnership,'Placeholder rate');
+  // Category add-ons — first category is base (included), each additional charges by tier
+  if(mods.categories&&mods.categories.length>1){
+    const relKey=rel==='returning'?'returning':tier==='corporate'?'corporate':'founder';
+    const rates=CATEGORY_ADDON_RATES[relKey]||CATEGORY_ADDON_RATES.founder;
+    mods.categories.slice(1).forEach((cat,i)=>{
+      const tier2=cat.addonTier||'standard';
+      const hasContent=(cat.category&&cat.category.trim())||(cat.skus&&cat.skus.some(s=>s.sku&&s.sku.trim()));
+      if(tier2!=='base'&&rates[tier2]&&hasContent){
+        add('Add-on: '+(cat.category||'Category '+(i+2))+' ('+tier2+')',rates[tier2],'Additional category');
+      }
+    });
+  }
+  const s1=Math.round(sub/2);
+  return {lines,total:sub,stage1:s1,stage2:sub-s1};
+};
+
+const IDX_KEY='sp-briefs-v1-index';
+const bKey=(id)=>'sp-brief-v1-'+id;
+const loadIdx=()=>{try{return JSON.parse(localStorage.getItem(IDX_KEY)||'[]');}catch{return[];}};
+const loadBrief=(id)=>{try{const d=localStorage.getItem(bKey(id));return d?JSON.parse(d):null;}catch{return null;}};
+const saveBrief=(brief,idx)=>{
+  try{
+    localStorage.setItem(bKey(brief.id),JSON.stringify(brief));
+    const entry={id:brief.id,clientName:brief.clientName,company:brief.company,proposalStatus:brief.proposalStatus,updatedAt:brief.updatedAt};
+    const ni=[...idx.filter(b=>b.id!==brief.id),entry].sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt));
+    localStorage.setItem(IDX_KEY,JSON.stringify(ni));
+    return ni;
+  }catch(e){return idx;}
+};
+const delBrief=(id,idx)=>{try{localStorage.removeItem(bKey(id));const ni=idx.filter(b=>b.id!==id);localStorage.setItem(IDX_KEY,JSON.stringify(ni));return ni;}catch{return idx;}};
+const getApiKey=()=>localStorage.getItem('sp-api-key')||'';
+const saveApiKey=(k)=>localStorage.setItem('sp-api-key',k.trim());
+const getPmt=()=>{try{return JSON.parse(localStorage.getItem('sp-pmt')||'{}');}catch{return{};}};
+const savePmt=(s)=>localStorage.setItem('sp-pmt',JSON.stringify(s));
+const nextInvoiceNum=()=>{const n=parseInt(localStorage.getItem('sp-inv-ctr')||'1000')+1;localStorage.setItem('sp-inv-ctr',String(n));return n;};
+
+const callClaude = async(system,parts,apiKey)=>{
+  const res = await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:3000,system,messages:[{role:'user',content:Array.isArray(parts)?parts:[{type:'text',text:parts}]}]})
+  });
+  const d=await res.json();
+  if(d.error) throw new Error(d.error.message||'API error');
+  if(!d.content||!d.content[0]) throw new Error('No response');
+  return d.content[0].text;
+};
+
+const fetchUrl = async(url)=>{
+  const res = await fetch('/.netlify/functions/fetch-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+  if(!res.ok) throw new Error('Function error '+res.status);
+  return await res.json();
+};
+
+const readAsBase64=(file)=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+const readAsText=(file)=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsText(file);});
+const IMG_TYPES={'image/jpeg':1,'image/jpg':1,'image/png':1,'image/webp':1,'image/gif':1};
+
+const processFile = async(file)=>{
+  const item={id:uid(),name:file.name,type:file.type,size:file.size};
+  if(IMG_TYPES[file.type]){item.kind='image';item.base64=await readAsBase64(file);return item;}
+  if(file.type==='application/pdf'){item.kind='pdf';item.base64=await readAsBase64(file);return item;}
+  if(file.type.startsWith('text/')||['.txt','.eml','.md','.csv'].some(e=>file.name.toLowerCase().endsWith(e))){item.kind='text';item.textContent=await readAsText(file);return item;}
+  return null;
+};
+
+const buildParts = (transcript,notes,mnText,mnImages,files,links)=>{
+  const parts=[];
+  (mnImages||[]).forEach(f=>{parts.push({type:'image',source:{type:'base64',media_type:f.type==='image/jpg'?'image/jpeg':f.type,data:f.base64}});});
+  (files||[]).filter(f=>f.kind==='image').forEach(f=>{parts.push({type:'image',source:{type:'base64',media_type:f.type==='image/jpg'?'image/jpeg':f.type,data:f.base64}});});
+  (files||[]).filter(f=>f.kind==='pdf').forEach(f=>{parts.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:f.base64}});});
+  let text='';
+  if(transcript&&transcript.trim()) text+='CALL TRANSCRIPT:\n'+transcript.trim()+'\n\n';
+  if(mnText&&mnText.trim()) text+='MEETING NOTES (typed):\n'+mnText.trim()+'\n\n';
+  if((mnImages||[]).length>0) text+='MEETING NOTES: '+mnImages.length+' handwritten photo(s) attached above.\n\n';
+  if(notes&&notes.trim()) text+='OPERATOR NOTES:\n'+notes.trim()+'\n\n';
+  (files||[]).filter(f=>f.kind==='text').forEach(f=>{text+='ATTACHED FILE ('+f.name+'):\n'+f.textContent+'\n\n';});
+  const vl=(links||[]).filter(l=>l.url&&l.url.trim());
+  vl.forEach(l=>{
+    const heading=(l.label?l.label+' ('+l.url+')':l.url);
+    if(l.fetchStatus==='fetched'&&l.fetchedText) text+='FETCHED WEBSITE CONTENT '+heading+':\n'+l.fetchedText+'\n\n';
+    else text+='REFERENCE LINK '+heading+'\n\n';
+  });
+  if(!text.trim()) text='Analyze the attached files only.';
+  parts.push({type:'text',text:text.trim()});
+  return parts;
+};
+
+const fetchAllLinks = async(links)=>{
+  const toFetch=links.filter(l=>l.url&&l.url.trim()&&!l.fetchStatus);
+  if(!toFetch.length) return links;
+  const results=await Promise.allSettled(toFetch.map(l=>fetchUrl(l.url).then(r=>({id:l.id,r}))));
+  return links.map(l=>{
+    const m=results.find(x=>x.status==='fulfilled'&&x.value.id===l.id);
+    if(!m) return l;
+    const r=m.value.r;
+    return r.success?{...l,fetchStatus:'fetched',fetchedText:r.text,fetchedTitle:r.title||''}:{...l,fetchStatus:'blocked',fetchedText:null,fetchedTitle:'',fetchError:r.error||'Could not fetch'};
+  });
+};
+
+const DEFAULT_MODULES = {includePackage:true,preShipmentInspection:false,factoryAudit:false,qcDocumentation:false,additionalSiteVisit:false,additionalSiteVisitCount:1,outOfProvince:false,isRush:false,websitePMFee:false,techPackSimple:false,techPackComplex:false,productLaunchPartnership:false};
+
+const S = {
+  ta:{width:'100%',border:'1px solid #D8DCE2',borderRadius:3,padding:'12px 14px',fontSize:13,lineHeight:1.7,fontFamily:"'Open Sans',sans-serif",resize:'vertical',color:'#2D3748',background:'#FAFBFC'},
+  input:{border:'1px solid #D8DCE2',borderRadius:3,padding:'9px 12px',fontSize:12,fontFamily:"'Open Sans',sans-serif",color:'#2D3748',background:'#FAFBFC',width:'100%'},
+  sel:{border:'1px solid #E2E6EC',borderRadius:2,padding:'5px 8px',fontSize:11,fontFamily:"'Open Sans',sans-serif",color:'#333',background:'#FFF',cursor:'pointer'},
+  lbl:{display:'block',fontSize:10,fontWeight:700,color:'#6B7280',letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:6},
+  slbl:{fontSize:10,fontWeight:700,color:'#A0AEC0',letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:8},
+};
+
+function Spinner(){return React.createElement('div',{style:{width:11,height:11,border:'2px solid rgba(255,255,255,0.3)',borderTopColor:'currentColor',borderRadius:'50%',animation:'spin 0.7s linear infinite',flexShrink:0}});}
+
+function Btn({children,onClick,variant}){
+  const styles={
+    primary:{border:'1px solid #0056A8',background:'#0056A8',color:'#FFF',fontFamily:"'Cinzel',serif",letterSpacing:'0.06em'},
+    propose:{border:'1px solid #065F46',background:'#065F46',color:'#FFF',fontFamily:"'Cinzel',serif",letterSpacing:'0.07em'},
+    invoice:{border:'1px solid #6B46C1',background:'#6B46C1',color:'#FFF',fontFamily:"'Cinzel',serif",letterSpacing:'0.07em'},
+    danger:{border:'1px solid #FEB2B2',background:'#FFF5F5',color:'#C53030',fontFamily:"'Open Sans',sans-serif",letterSpacing:0},
+    default:{border:'1px solid #E2E8F0',background:'#FAFBFC',color:'#4A5568',fontFamily:"'Open Sans',sans-serif",letterSpacing:0},
+  };
+  const s=styles[variant||'default'];
+  return React.createElement('button',{onClick,style:{...s,padding:'6px 12px',fontSize:11,cursor:'pointer',borderRadius:3,whiteSpace:'nowrap'}},children);
+}
+
+function Card({title,accentColor,badge,badgeColor,badgeText,children}){
+  return React.createElement('div',{style:{background:'#FFF',border:'1px solid #E2E8F0',borderRadius:3,overflow:'hidden'}},
+    React.createElement('div',{style:{padding:'9px 15px',borderBottom:'1px solid #EDF2F7',borderLeft:'3px solid '+(accentColor||'#0056A8'),display:'flex',alignItems:'center',justifyContent:'space-between'}},
+      React.createElement('span',{style:{fontFamily:"'Cinzel',serif",fontSize:10,letterSpacing:'0.12em',color:'#2D3748',fontWeight:700,textTransform:'uppercase'}},title),
+      badge&&React.createElement('span',{style:{fontSize:10,background:badgeColor||'#EBF4FF',color:badgeText||'#2B6CB0',padding:'2px 8px',borderRadius:10,fontWeight:600}},badge)
+    ),
+    React.createElement('div',{style:{padding:'13px 15px'}},children)
+  );
+}
+
+function InlineEdit({value,onSave,displayStyle,inputStyle}){
+  const [editing,setEditing]=useState(false);
+  const [val,setVal]=useState(value);
+  const ref=useRef(null);
+  useEffect(()=>setVal(value),[value]);
+  const commit=()=>{setEditing(false);if(val!==value)onSave(val);};
+  if(editing) return React.createElement('input',{ref,value:val,onChange:e=>setVal(e.target.value),onBlur:commit,onKeyDown:e=>e.key==='Enter'&&commit(),style:{...inputStyle,border:'1px solid #0056A8',borderRadius:2,padding:'2px 6px',background:'#EBF4FF',width:'100%'}});
+  return React.createElement('div',{onClick:()=>{setEditing(true);setTimeout(()=>ref.current&&ref.current.focus(),10);},style:{...displayStyle,cursor:'text',borderRadius:2,padding:'2px 6px',border:'1px solid transparent',minHeight:20},title:'Click to edit'},val||React.createElement('span',{style:{color:'#CBD5E0',fontStyle:'italic',fontSize:13,fontWeight:400}},'Click to edit'));
+}
+
+function EditBlock({value,onSave,placeholder}){
+  const [editing,setEditing]=useState(false);
+  const [val,setVal]=useState(value);
+  useEffect(()=>setVal(value),[value]);
+  const commit=()=>{setEditing(false);if(val!==value)onSave(val);};
+  if(editing) return React.createElement('textarea',{value:val,onChange:e=>setVal(e.target.value),onBlur:commit,autoFocus:true,style:{width:'100%',border:'1px solid #0056A8',borderRadius:2,padding:'8px 10px',fontSize:13,lineHeight:1.7,fontFamily:"'Open Sans',sans-serif",resize:'vertical',minHeight:76,background:'#EBF4FF',color:'#1A202C',boxSizing:'border-box'}});
+  return React.createElement('div',{onClick:()=>setEditing(true),style:{fontSize:13,lineHeight:1.7,color:val?'#2D3748':'#CBD5E0',cursor:'text',minHeight:58,fontStyle:val?'normal':'italic',whiteSpace:'pre-wrap'}},val||placeholder);
+}
+
+function StatusBadge({status,blockingCount}){
+  const cfg={ready:['Ready for Proposal','#ECFDF5','#065F46'],blocked:['Gaps Pending','#FEF3C7','#92400E'],draft:['Draft','#F7FAFC','#718096']};
+  const [label,bg,color]=cfg[status]||cfg.draft;
+  return React.createElement('div',{style:{background:bg,color,fontSize:11,fontWeight:700,padding:'4px 11px',borderRadius:12,whiteSpace:'nowrap'}},blockingCount>0?(blockingCount+' Blocking Gap'+(blockingCount!==1?'s':'')):label);
+}
+
+function GapRow({gap,onResolve,onRemove}){
+  return React.createElement('div',{style:{padding:'8px 0',borderBottom:'1px solid #F7FAFC',opacity:gap.resolved?0.4:1}},
+    React.createElement('div',{style:{display:'flex',gap:9,alignItems:'flex-start'}},
+      React.createElement('div',{style:{width:7,height:7,borderRadius:'50%',background:gap.blocking?'#F59E0B':'#94A3B8',marginTop:4,flexShrink:0}}),
+      React.createElement('div',{style:{flex:1,minWidth:0}},
+        React.createElement('div',{style:{fontSize:11,fontWeight:700,color:'#2D3748',textTransform:'uppercase',letterSpacing:'0.04em',textDecoration:gap.resolved?'line-through':'none',marginBottom:2}},gap.field,(gap.blocking&&!gap.resolved)&&React.createElement('span',{style:{color:'#F59E0B',fontSize:9,marginLeft:4}},'BLOCKING')),
+        React.createElement('div',{style:{fontSize:12,color:'#4A5568',lineHeight:1.55}},gap.question)
+      ),
+      !gap.resolved&&React.createElement('div',{style:{display:'flex',gap:4,flexShrink:0}},
+        React.createElement('button',{onClick:onResolve,style:{fontSize:10,background:'#ECFDF5',color:'#065F46',border:'1px solid #A7F3D0',padding:'3px 8px',borderRadius:2,cursor:'pointer'}},'Resolved'),
+        React.createElement('button',{onClick:onRemove,style:{fontSize:10,background:'none',color:'#E53E3E',border:'1px solid #FEB2B2',padding:'3px 6px',borderRadius:2,cursor:'pointer'}},'x')
+      )
+    )
+  );
+}
+
+function UpsellRow({opp,onChange}){
+  const pColor={high:'#C53030',medium:'#C05621',low:'#4A5568'}[opp.priority]||'#4A5568';
+  const sBg={included:'#ECFDF5',discussed:'#EBF4FF'}[opp.status]||'transparent';
+  return React.createElement('div',{style:{padding:'8px',borderBottom:'1px solid #F7FAFC',background:sBg,borderRadius:2,marginBottom:3}},
+    React.createElement('div',{style:{display:'flex',gap:8,alignItems:'flex-start'}},
+      React.createElement('div',{style:{flex:1,minWidth:0}},
+        React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,marginBottom:3}},
+          React.createElement('span',{style:{fontSize:12,fontWeight:600,color:'#1A202C'}},opp.service),
+          React.createElement('span',{style:{fontSize:9,fontWeight:800,color:pColor,textTransform:'uppercase',letterSpacing:'0.06em'}},opp.priority)
+        ),
+        React.createElement('div',{style:{fontSize:12,color:'#4A5568',lineHeight:1.55}},opp.rationale)
+      ),
+      React.createElement('select',{value:opp.status,onChange:e=>onChange('status',e.target.value),style:{...S.sel,fontSize:10,padding:'3px 5px',flexShrink:0}},
+        React.createElement('option',{value:'open'},'Open'),
+        React.createElement('option',{value:'discussed'},'Discussed'),
+        React.createElement('option',{value:'included'},'Included')
+      )
+    )
+  );
+}
+
+function FileUpload({files,onFilesChange,disabled,maxFiles}){
+  const MAX=maxFiles||5;
+  const [dragging,setDragging]=useState(false);
+  const [err,setErr]=useState('');
+  const ref=useRef(null);
+  const handle=async(rawFiles)=>{
+    setErr('');
+    const remaining=MAX-files.length;
+    if(remaining<=0){setErr('Maximum '+MAX+' files.');return;}
+    const processed=[];
+    for(const f of Array.from(rawFiles).slice(0,remaining)){
+      try{const item=await processFile(f);if(item)processed.push(item);else setErr(p=>p||'Unsupported file skipped.');}catch(e){setErr(p=>p||'Error reading '+f.name);}
+    }
+    if(processed.length) onFilesChange([...files,...processed]);
+  };
+  const remove=(id)=>onFilesChange(files.filter(f=>f.id!==id));
+  const iconFor=(kind)=>kind==='image'?'img':kind==='pdf'?'pdf':'txt';
+  return React.createElement('div',null,
+    React.createElement('div',{
+      onDragOver:e=>{e.preventDefault();if(!disabled)setDragging(true);},
+      onDragLeave:()=>setDragging(false),
+      onDrop:e=>{e.preventDefault();setDragging(false);if(!disabled)handle(e.dataTransfer.files);},
+      onClick:()=>!disabled&&ref.current&&ref.current.click(),
+      style:{border:'2px dashed '+(dragging?'#0056A8':'#D8DCE2'),borderRadius:3,padding:'13px 16px',textAlign:'center',cursor:disabled?'default':'pointer',background:dragging?'#EBF4FF':'#FAFBFC'}
+    },
+      React.createElement('div',{style:{fontSize:12,color:'#718096'}},'Drag and drop files here, or click to browse'),
+      React.createElement('div',{style:{fontSize:10,color:'#A0AEC0',marginTop:3}},'Images, PDFs, text files. Max '+MAX+' files.'),
+      React.createElement('input',{ref,type:'file',multiple:true,accept:'image/*,.pdf,.txt,.eml,.md,.csv',style:{display:'none'},onChange:e=>handle(e.target.files),disabled})
+    ),
+    err&&React.createElement('div',{style:{fontSize:11,color:'#C05621',marginTop:4}},err),
+    files.length>0&&React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:5,marginTop:7}},
+      files.map(f=>React.createElement('div',{key:f.id,style:{background:'#EBF4FF',border:'1px solid #BEE3F8',borderRadius:2,padding:'3px 8px',fontSize:11,color:'#2B6CB0',display:'flex',alignItems:'center',gap:5,maxWidth:200}},
+        React.createElement('span',null,iconFor(f.kind)),
+        React.createElement('span',{style:{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}},f.name),
+        React.createElement('span',{style:{color:'#90CDF4',fontSize:10,flexShrink:0}},fmtSize(f.size)),
+        !disabled&&React.createElement('button',{onClick:e=>{e.stopPropagation();remove(f.id);},style:{background:'none',border:'none',color:'#718096',cursor:'pointer',padding:'0 2px',fontSize:13,lineHeight:1}},'x')
+      ))
+    )
+  );
+}
+
+function MeetingNotes({text,onTextChange,images,onImagesChange,disabled}){
+  const [tab,setTab]=useState('typed');
+  const ref=useRef(null);
+  const handlePhoto=async(rawFiles)=>{
+    const MAX=3;const remaining=MAX-images.length;if(remaining<=0) return;
+    const processed=[];
+    for(const f of Array.from(rawFiles).filter(f=>IMG_TYPES[f.type]).slice(0,remaining)){
+      try{const b64=await readAsBase64(f);processed.push({id:uid(),name:f.name,type:f.type,size:f.size,base64:b64,kind:'image'});}catch(e){}
+    }
+    if(processed.length) onImagesChange([...images,...processed]);
+  };
+  const remove=(id)=>onImagesChange(images.filter(img=>img.id!==id));
+  return React.createElement('div',{style:{border:'1px solid #D8DCE2',borderRadius:3,overflow:'hidden',background:'#FAFBFC'}},
+    React.createElement('div',{style:{display:'flex',borderBottom:'1px solid #E2E8F0'}},
+      ['typed','photo'].map(v=>React.createElement('button',{key:v,onClick:()=>!disabled&&setTab(v),style:{padding:'8px 16px',border:'none',borderBottom:'2px solid '+(tab===v?'#0056A8':'transparent'),background:'none',color:tab===v?'#0056A8':'#718096',fontSize:11,cursor:disabled?'default':'pointer',fontFamily:"'Open Sans',sans-serif",fontWeight:tab===v?600:400,marginBottom:-1}},
+        v==='typed'?'Typed Notes':('Handwritten Photo'+(images.length>0?' ('+images.length+')':''))))
+    ),
+    tab==='typed'&&React.createElement('textarea',{value:text,onChange:e=>onTextChange(e.target.value),placeholder:'Paste or type your meeting notes here.',style:{...S.ta,border:'none',borderRadius:0,background:'transparent',height:100,resize:'vertical'},disabled}),
+    tab==='photo'&&React.createElement('div',{style:{padding:'12px 14px'}},
+      images.length>0&&React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:8,marginBottom:10}},
+        images.map(img=>React.createElement('div',{key:img.id,style:{position:'relative',display:'inline-block'}},
+          React.createElement('img',{src:'data:'+img.type+';base64,'+img.base64,alt:img.name,style:{width:80,height:80,objectFit:'cover',borderRadius:3,border:'1px solid #E2E8F0',display:'block'}}),
+          !disabled&&React.createElement('button',{onClick:()=>remove(img.id),style:{position:'absolute',top:-5,right:-5,background:'#E53E3E',border:'none',color:'#FFF',borderRadius:'50%',width:16,height:16,fontSize:10,cursor:'pointer',lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center'}},'x')
+        ))
+      ),
+      images.length<3&&!disabled&&React.createElement('div',{onClick:()=>ref.current&&ref.current.click(),style:{border:'2px dashed #D8DCE2',borderRadius:3,padding:'12px',textAlign:'center',cursor:'pointer',background:'#FFF'}},
+        React.createElement('div',{style:{fontSize:12,color:'#718096'}},'Click to add photo'+(images.length>0?' ('+(3-images.length)+' remaining)':'')),
+        React.createElement('input',{ref,type:'file',multiple:true,accept:'image/*',style:{display:'none'},onChange:e=>handlePhoto(e.target.files),disabled})
+      ),
+      images.length===0&&React.createElement('p',{style:{fontSize:11,color:'#A0AEC0',margin:0}},'Upload photos of handwritten notes. Claude will read and extract all relevant information.')
+    )
+  );
+}
+
+function LinksSection({links,onLinksChange,disabled}){
+  const add=()=>onLinksChange([...links,{id:uid(),label:'',url:'',fetchStatus:null}]);
+  const update=(id,field,val)=>onLinksChange(links.map(l=>l.id===id?{...l,[field]:val,fetchStatus:field==='url'?null:l.fetchStatus}:l));
+  const remove=(id)=>onLinksChange(links.filter(l=>l.id!==id));
+  const refetch=async(id)=>{
+    const link=links.find(l=>l.id===id);if(!link||!link.url) return;
+    onLinksChange(links.map(l=>l.id===id?{...l,fetchStatus:'fetching'}:l));
+    try{
+      const r=await fetchUrl(link.url);
+      onLinksChange(links.map(l=>l.id===id?(r.success?{...l,fetchStatus:'fetched',fetchedText:r.text,fetchedTitle:r.title||''}:{...l,fetchStatus:'blocked',fetchedText:null,fetchedTitle:'',fetchError:r.error}):l));
+    }catch(e){onLinksChange(links.map(l=>l.id===id?{...l,fetchStatus:'blocked',fetchError:e.message}:l));}
+  };
+  return React.createElement('div',null,
+    links.map(link=>React.createElement('div',{key:link.id,style:{marginBottom:7}},
+      React.createElement('div',{style:{display:'flex',gap:7,alignItems:'center'}},
+        React.createElement('input',{value:link.label,onChange:e=>update(link.id,'label',e.target.value),placeholder:'Label',style:{...S.input,width:120,flexShrink:0},disabled}),
+        React.createElement('input',{type:'url',value:link.url,onChange:e=>update(link.id,'url',e.target.value),placeholder:'https://...',style:{...S.input,flex:1},disabled}),
+        !disabled&&link.url&&link.url.trim()&&React.createElement('button',{onClick:()=>refetch(link.id),disabled:link.fetchStatus==='fetching',style:{padding:'6px 10px',background:link.fetchStatus==='fetched'?'#ECFDF5':link.fetchStatus==='blocked'?'#FFF5F5':'#EBF4FF',border:'1px solid '+(link.fetchStatus==='fetched'?'#A7F3D0':link.fetchStatus==='blocked'?'#FEB2B2':'#BEE3F8'),color:link.fetchStatus==='fetched'?'#065F46':link.fetchStatus==='blocked'?'#C53030':'#2B6CB0',borderRadius:2,cursor:'pointer',fontSize:10,whiteSpace:'nowrap',flexShrink:0}},link.fetchStatus==='fetching'?'Fetching...':link.fetchStatus==='fetched'?'Fetched':link.fetchStatus==='blocked'?'Retry':'Fetch'),
+        !disabled&&React.createElement('button',{onClick:()=>remove(link.id),style:{background:'none',border:'none',color:'#A0AEC0',cursor:'pointer',fontSize:17,padding:'0 4px',lineHeight:1,flexShrink:0}},'x')
+      ),
+      link.fetchStatus==='fetched'&&link.fetchedTitle&&React.createElement('div',{style:{fontSize:10,color:'#065F46',marginTop:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},'OK: '+link.fetchedTitle),
+      link.fetchStatus==='blocked'&&React.createElement('div',{style:{fontSize:10,color:'#C53030',marginTop:3}},link.fetchError||'Could not fetch')
+    )),
+    !disabled&&React.createElement('button',{onClick:add,style:{background:'none',border:'1px dashed #CBD5E0',color:'#A0AEC0',padding:'5px 12px',fontSize:11,borderRadius:2,cursor:'pointer',width:'100%'}},'+ Add Link'),
+    links.length===0&&disabled&&React.createElement('div',{style:{fontSize:12,color:'#A0AEC0',fontStyle:'italic'}},'No links added.')
+  );
+}
+
+function GoalsList({goals,onGoalsChange}){
+  const [editingId,setEditingId]=useState(null);const [editVal,setEditVal]=useState('');
+  const startEdit=(g)=>{setEditingId(g.id);setEditVal(g.text);};
+  const commitEdit=()=>{if(!editVal.trim()){onGoalsChange((goals||[]).filter(g=>g.id!==editingId));setEditingId(null);return;}onGoalsChange((goals||[]).map(g=>g.id===editingId?{...g,text:editVal.trim()}:g));setEditingId(null);};
+  const remove=(id)=>onGoalsChange((goals||[]).filter(g=>g.id!==id));
+  const add=()=>{const ng={id:uid(),text:'New goal'};onGoalsChange([...(goals||[]),ng]);setEditingId(ng.id);setEditVal(ng.text);};
+  const list=goals||[];
+  return React.createElement('div',null,
+    list.length===0&&React.createElement('div',{style:{fontSize:12,color:'#A0AEC0',fontStyle:'italic',marginBottom:8}},'No goals captured yet.'),
+    list.map((g,i)=>React.createElement('div',{key:g.id,style:{display:'flex',alignItems:'flex-start',gap:8,padding:'6px 0',borderBottom:i<list.length-1?'1px solid #F7FAFC':'none'}},
+      React.createElement('div',{style:{width:18,height:18,borderRadius:'50%',background:'#EBF4FF',border:'1px solid #BEE3F8',color:'#2B6CB0',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}},i+1),
+      editingId===g.id
+        ?React.createElement('textarea',{value:editVal,onChange:e=>setEditVal(e.target.value),onBlur:commitEdit,autoFocus:true,onKeyDown:e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();commitEdit();}},style:{flex:1,border:'1px solid #0056A8',borderRadius:2,padding:'4px 8px',fontSize:13,lineHeight:1.6,fontFamily:"'Open Sans',sans-serif",resize:'vertical',minHeight:36,background:'#EBF4FF',color:'#1A202C',boxSizing:'border-box'}})
+        :React.createElement('div',{onClick:()=>startEdit(g),style:{flex:1,fontSize:13,lineHeight:1.6,color:'#2D3748',cursor:'text',minHeight:24,padding:'2px 0',whiteSpace:'pre-wrap'}},g.text),
+      React.createElement('button',{onClick:()=>remove(g.id),title:'Remove goal',style:{background:'none',border:'none',color:'#CBD5E0',cursor:'pointer',fontSize:15,lineHeight:1,padding:'2px 4px',flexShrink:0,marginTop:2}},'x')
+    )),
+    React.createElement('button',{onClick:add,style:{marginTop:9,background:'none',border:'1px dashed #CBD5E0',color:'#A0AEC0',padding:'5px 10px',fontSize:11,borderRadius:2,cursor:'pointer',width:'100%'}},'+ Add Goal')
+  );
+}
+
+function ProductCategoriesTable({categories,onCategoriesChange}){
+  const cats=categories||[];
+  const addCat=()=>onCategoriesChange([...cats,{id:uid(),category:'',addonTier:'standard',skus:[{id:uid(),sku:'',quantity:'',phase:'Phase 1',notes:''}]}]);
+  const removeCat=(catId)=>{onCategoriesChange(cats.filter(c=>c.id!==catId));};
+  const updateCat=(catId,field,val)=>onCategoriesChange(cats.map(c=>c.id===catId?{...c,[field]:val}:c));
+  const addSku=(catId)=>onCategoriesChange(cats.map(c=>c.id===catId?{...c,skus:[...(c.skus||[]),{id:uid(),sku:'',quantity:'',phase:'Phase 1',notes:''}]}:c));
+  const removeSku=(catId,skuId)=>onCategoriesChange(cats.map(c=>c.id===catId?{...c,skus:(c.skus||[]).filter(s=>s.id!==skuId)}:c));
+  const updateSku=(catId,skuId,field,val)=>onCategoriesChange(cats.map(c=>c.id===catId?{...c,skus:(c.skus||[]).map(s=>s.id===skuId?{...s,[field]:val}:s)}:c));
+  const thStyle={padding:'6px 10px',fontSize:10,fontWeight:700,color:'#A0AEC0',letterSpacing:'0.08em',textTransform:'uppercase',background:'#F7FAFC',borderRight:'1px solid #EDF2F7',textAlign:'left'};
+  const tdBase={padding:'6px 10px',fontSize:12,borderRight:'1px solid #EDF2F7',verticalAlign:'middle'};
+  const inp=(val,onChange,placeholder,bg)=>React.createElement('input',{value:val||'',onChange:e=>onChange(e.target.value),placeholder,style:{width:'100%',border:'none',outline:'none',fontSize:12,fontFamily:"'Open Sans',sans-serif",color:'#1A202C',background:bg||'transparent',padding:0}});
+  return React.createElement('div',null,
+    React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',border:'1px solid #E2E8F0',borderRadius:3,overflow:'hidden',tableLayout:'fixed'}},
+      React.createElement('thead',null,React.createElement('tr',{style:{borderBottom:'2px solid #E2E8F0'}},
+        React.createElement('th',{style:{...thStyle,width:'21%'}},'Category'),
+        React.createElement('th',{style:{...thStyle,width:'21%'}},'SKU'),
+        React.createElement('th',{style:{...thStyle,width:'11%'}},'Quantity'),
+        React.createElement('th',{style:{...thStyle,width:'12%'}},'Phase'),
+        React.createElement('th',{style:{...thStyle,width:'13%'}},'Add-on Tier'),
+        React.createElement('th',{style:{...thStyle,width:'17%',borderRight:'none'}},'Notes'),
+        React.createElement('th',{style:{width:80,background:'#F7FAFC',padding:0}})
+      )),
+      React.createElement('tbody',null,
+        cats.length===0&&React.createElement('tr',null,React.createElement('td',{colSpan:7,style:{padding:'14px 10px',fontSize:12,color:'#A0AEC0',fontStyle:'italic',textAlign:'center'}},'No categories yet. Add one below.')),
+        cats.flatMap((cat,ci)=>{
+          const skus=cat.skus||[];
+          const catBg='#EBF4FF';
+          const rows=skus.map((sku,si)=>{
+            const rowBg=si===0?catBg:si%2===0?'#FFF':'#FAFBFC';
+            const bdr='1px solid '+(si===0?'#BEE3F8':'#EDF2F7');
+            return React.createElement('tr',{key:sku.id,style:{borderBottom:bdr}},
+              React.createElement('td',{style:{...tdBase,background:rowBg,borderRight:bdr}},
+                si===0?inp(cat.category,v=>updateCat(cat.id,'category',v),'Category name',catBg):null
+              ),
+              React.createElement('td',{style:{...tdBase,background:rowBg,borderRight:bdr}},
+                inp(sku.sku,v=>updateSku(cat.id,sku.id,'sku',v),'SKU name',rowBg)
+              ),
+              React.createElement('td',{style:{...tdBase,background:rowBg,borderRight:bdr}},
+                inp(sku.quantity,v=>updateSku(cat.id,sku.id,'quantity',v),'Qty',rowBg)
+              ),
+              React.createElement('td',{style:{...tdBase,padding:'4px 6px',background:rowBg,borderRight:bdr}},
+                React.createElement('select',{value:sku.phase||'Phase 1',onChange:e=>updateSku(cat.id,sku.id,'phase',e.target.value),style:{...S.sel,width:'100%',fontSize:11,padding:'3px 5px'}},
+                  React.createElement('option',{value:'Phase 1'},'Phase 1'),
+                  React.createElement('option',{value:'Phase 2'},'Phase 2'),
+                  React.createElement('option',{value:'Phase 3'},'Phase 3')
+                )
+              ),
+              React.createElement('td',{style:{...tdBase,padding:'4px 6px',background:rowBg,borderRight:bdr}},
+                si===0
+                  ?React.createElement('select',{value:cat.addonTier||'standard',onChange:e=>updateCat(cat.id,'addonTier',e.target.value),style:{...S.sel,width:'100%',fontSize:11,padding:'3px 5px'}},
+                    React.createElement('option',{value:'base'},'Base (included)'),
+                    React.createElement('option',{value:'standard'},'Standard'),
+                    React.createElement('option',{value:'moderate'},'Moderate'),
+                    React.createElement('option',{value:'complex'},'Complex')
+                  )
+                  :React.createElement('span',{style:{fontSize:10,color:'#A0AEC0',fontStyle:'italic'}},'inherited')
+              ),
+              React.createElement('td',{style:{...tdBase,background:rowBg,borderRight:'none'}},
+                inp(sku.notes,v=>updateSku(cat.id,sku.id,'notes',v),'Notes',rowBg)
+              ),
+              React.createElement('td',{style:{padding:'4px 6px',background:rowBg,textAlign:'center',verticalAlign:'middle',whiteSpace:'nowrap'}},
+                si===0
+                  ?React.createElement('div',{style:{display:'flex',gap:4,alignItems:'center',justifyContent:'center'}},
+                    React.createElement('button',{onMouseDown:e=>{e.preventDefault();e.stopPropagation();addSku(cat.id);},style:{background:'#0056A8',border:'none',color:'#FFF',borderRadius:2,padding:'2px 6px',fontSize:10,cursor:'pointer',lineHeight:1.4}},'+ SKU'),
+                    React.createElement('button',{onMouseDown:e=>{e.preventDefault();e.stopPropagation();removeCat(cat.id);},style:{background:'#FFF5F5',border:'1px solid #FEB2B2',color:'#C53030',borderRadius:2,padding:'2px 6px',fontSize:10,cursor:'pointer',lineHeight:1.4}},'Remove')
+                  )
+                  :React.createElement('button',{onMouseDown:e=>{e.preventDefault();e.stopPropagation();if(skus.length>1)removeSku(cat.id,sku.id);},disabled:skus.length<=1,style:{background:'none',border:'none',color:skus.length<=1?'#E2E8F0':'#A0AEC0',cursor:skus.length<=1?'default':'pointer',fontSize:14,lineHeight:1,padding:'2px 4px'}},'x')
+              )
+            );
+          });
+          return rows;
+        })
+      )
+    ),
+    React.createElement('button',{onClick:addCat,style:{marginTop:8,background:'#EBF4FF',border:'1px solid #BEE3F8',color:'#2B6CB0',padding:'7px 14px',fontSize:12,fontWeight:600,borderRadius:3,cursor:'pointer',width:'100%',fontFamily:"'Open Sans',sans-serif"}},'+ Add Category')
+  );
+}
+
+function ScopeMatrix({tier,mods,rel,pricing,onModChange}){
+  const r=ADDON_RATES[tier||'founder'];
+  const pkgPrice=tier==='corporate'?STANDARD_PKG.corporate:rel==='friends_family'?STANDARD_PKG.friendsFamily:rel==='returning'?STANDARD_PKG.returning:STANDARD_PKG.founder;
+  const chk=(fieldId)=>React.createElement('input',{type:'checkbox',checked:!!mods[fieldId],onChange:()=>onModChange({[fieldId]:!mods[fieldId]}),style:{accentColor:'#0056A8',width:13,height:13,cursor:'pointer',flexShrink:0}});
+  return React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 255px',gap:22,alignItems:'start'}},
+    React.createElement('div',null,
+      React.createElement('div',{style:S.slbl},'Standard Sourcing Package'),
+      React.createElement('div',{style:{border:'1px solid #E2E8F0',borderRadius:3,marginBottom:14,overflow:'hidden'}},
+        React.createElement('div',{style:{display:'flex',alignItems:'center',gap:9,padding:'10px 12px',background:mods.includePackage?'#EBF4FF':'#FAFBFC',borderBottom:'1px solid #E2E8F0'}},
+          chk('includePackage'),
+          React.createElement('div',{style:{flex:1}},
+            React.createElement('div',{style:{fontSize:12,fontWeight:600,color:mods.includePackage?'#0056A8':'#2D3748'}},'Standard Sourcing Package'),
+            React.createElement('div',{style:{fontSize:10,color:'#A0AEC0',marginTop:1}},tier==='corporate'?'Corporate rate':rel==='friends_family'?'Friends and Family rate':rel==='returning'?'Returning client rate':'Founder rate')
+          ),
+          React.createElement('div',{style:{fontSize:14,color:'#0056A8',fontWeight:700}},fmt(pkgPrice))
+        ),
+        PKG_MODULES.map((m,i)=>React.createElement('div',{key:i,style:{display:'flex',alignItems:'flex-start',gap:8,padding:'6px 12px',borderBottom:i<PKG_MODULES.length-1?'1px solid #F7FAFC':'none',opacity:mods.includePackage?1:0.4}},
+          React.createElement('div',{style:{width:5,height:5,borderRadius:'50%',background:'#0056A8',flexShrink:0,marginTop:5}}),
+          React.createElement('div',{style:{flex:1}},
+            React.createElement('span',{style:{fontSize:11,fontWeight:500,color:'#2D3748'}},m.label),
+            React.createElement('span',{style:{fontSize:10,color:'#A0AEC0',marginLeft:5}},m.desc)
+          )
+        )),
+        mods.includePackage&&React.createElement('div',{style:{padding:'8px 12px',background:'#F0F7FF',display:'flex',alignItems:'center',gap:8}},
+          chk('isRush'),
+          React.createElement('span',{style:{fontSize:11,color:'#2D3748'}},'Rush Engagement'),
+          React.createElement('span',{style:{fontSize:10,color:'#A0AEC0'}},'Under 21 days, adds 25% to package fee'),
+          React.createElement('span',{style:{fontSize:11,color:'#718096',marginLeft:'auto'}},'+'+fmt(Math.round(pkgPrice*0.25)))
+        )
+      ),
+      React.createElement('div',{style:S.slbl},'Sourcing Add-Ons'),
+      ADDON_META.map((mod,i)=>React.createElement('div',{key:mod.id,style:{display:'flex',alignItems:'center',gap:9,padding:'7px 0',borderBottom:i<ADDON_META.length-1?'1px solid #F7FAFC':'none'}},
+        chk(mod.id),
+        React.createElement('div',{style:{flex:1,minWidth:0}},
+          React.createElement('span',{style:{fontSize:12,fontWeight:500,color:mods[mod.id]?'#0056A8':'#2D3748'}},mod.label),
+          React.createElement('span',{style:{fontSize:10,color:'#A0AEC0',marginLeft:5}},mod.desc)
+        ),
+        mod.id==='additionalSiteVisit'&&mods[mod.id]&&React.createElement('div',{style:{display:'flex',alignItems:'center',gap:4,marginRight:6}},
+          React.createElement('span',{style:{fontSize:10,color:'#718096'}},"Qty:"),
+          React.createElement('input',{type:'number',min:1,max:20,value:mods.additionalSiteVisitCount||1,onChange:e=>onModChange({additionalSiteVisitCount:Math.max(1,parseInt(e.target.value)||1)}),style:{width:40,border:'1px solid #D8DCE2',borderRadius:2,padding:'2px 4px',fontSize:11,textAlign:'center'}})
+        ),
+        React.createElement('div',{style:{fontSize:12,color:'#0056A8',fontWeight:600,minWidth:50,textAlign:'right'}},
+          mod.id==='additionalSiteVisit'&&mods[mod.id]?fmt(r[mod.id]*(mods.additionalSiteVisitCount||1))+' ('+fmt(r[mod.id])+' ea)':fmt(r[mod.id])
+        )
+      )),
+      React.createElement('div',{style:{...S.slbl,marginTop:14}},'Brand Building Services'),
+      BRAND_META.map((mod,i)=>React.createElement('div',{key:mod.id,style:{display:'flex',alignItems:'center',gap:9,padding:'7px 0',borderBottom:i<BRAND_META.length-1?'1px solid #F7FAFC':'none'}},
+        chk(mod.id),
+        React.createElement('div',{style:{flex:1,minWidth:0}},
+          React.createElement('span',{style:{fontSize:12,fontWeight:500,color:mods[mod.id]?'#7C3AED':'#2D3748'}},mod.label),
+          React.createElement('span',{style:{fontSize:10,color:'#A0AEC0',marginLeft:5}},mod.desc)
+        ),
+        React.createElement('div',{style:{fontSize:12,color:'#7C3AED',fontWeight:600,minWidth:55,textAlign:'right'}},fmt(BRAND_RATES[mod.id]))
+      ))
+    ),
+    React.createElement('div',{style:{background:'#F7FAFC',border:'1px solid #E2E8F0',borderRadius:3,padding:15,position:'sticky',top:0}},
+      React.createElement('div',{style:S.slbl},'Fee Summary'),
+      pricing.lines.length===0
+        ?React.createElement('div',{style:{color:'#CBD5E0',fontSize:12,textAlign:'center',padding:'14px 0'}},'Select services to calculate')
+        :React.createElement('div',null,
+          pricing.lines.map((l,i)=>React.createElement('div',{key:i,style:{display:'flex',justifyContent:'space-between',marginBottom:6}},
+            React.createElement('div',null,React.createElement('div',{style:{fontSize:12,color:'#4A5568'}},l.label),l.detail&&React.createElement('div',{style:{fontSize:10,color:'#A0AEC0'}},l.detail)),
+            React.createElement('span',{style:{fontSize:12,color:'#2D3748',fontWeight:500,marginLeft:8,flexShrink:0}},fmt(l.amt))
+          )),
+          React.createElement('div',{style:{borderTop:'2px solid #2D3748',marginTop:9,paddingTop:11,display:'flex',justifyContent:'space-between',alignItems:'baseline'}},
+            React.createElement('span',{style:{fontFamily:"'Cinzel',serif",fontSize:10,fontWeight:700,color:'#1A202C'}},'Total Fee'),
+            React.createElement('span',{style:{fontFamily:"'Cinzel',serif",fontSize:17,fontWeight:700,color:'#0056A8'}},fmt(pricing.total))
+          ),
+          React.createElement('div',{style:{fontSize:10,color:'#A0AEC0',marginTop:3,paddingBottom:8,borderBottom:'1px solid #E2E8F0'}},'Coordination: 10% of order value plus shipping, minimum '+fmt(COORD_MIN)),
+          React.createElement('div',{style:{marginTop:11}},
+            React.createElement('div',{style:{...S.slbl,marginBottom:7}},'Payment Schedule'),
+            [['Stage 1 Deposit',pricing.stage1],['Stage 2 Balance',pricing.stage2]].map(([l,v])=>React.createElement('div',{key:l,style:{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:5}},
+              React.createElement('span',{style:{color:'#4A5568'}},l),
+              React.createElement('span',{style:{fontWeight:600,color:'#2D3748'}},fmt(v))
+            ))
+          )
+        )
+    )
+  );
+}
+
+function SetupView({onSave}){
+  const [apiKey,setApiKey]=useState('');const [err,setErr]=useState('');const [testing,setTesting]=useState(false);
+  const submit=async()=>{
+    if(!apiKey.trim()||!apiKey.startsWith('sk-')){setErr('Enter a valid Anthropic API key starting with sk-');return;}
+    setErr('');setTesting(true);
+    try{await callClaude('Reply OK',[{type:'text',text:'ping'}],apiKey.trim());onSave(apiKey.trim());}
+    catch(e){setErr('Key failed: '+e.message);}
+    setTesting(false);
+  };
+  return React.createElement('div',{style:{height:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#0A1628',padding:24}},
+    React.createElement('div',{style:{background:'#FFF',borderRadius:4,width:'100%',maxWidth:480,overflow:'hidden',boxShadow:'0 24px 64px rgba(0,0,0,0.4)'}},
+      React.createElement('div',{style:{background:'#0056A8',padding:'20px 24px'}},
+        React.createElement('div',{style:{fontFamily:"'Cinzel',serif",fontSize:13,letterSpacing:'0.16em',color:'#FFF',fontWeight:600}},'SOURCEPOINT'),
+        React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.5)',marginTop:3}},'INTELLIGENCE BRIEF SYSTEM')
+      ),
+      React.createElement('div',{style:{padding:28}},
+        React.createElement('h2',{style:{fontFamily:"'Cinzel',serif",fontSize:17,color:'#1A202C',fontWeight:600,margin:'0 0 8px'}},'Connect Your API Key'),
+        React.createElement('p',{style:{fontSize:13,color:'#718096',lineHeight:1.7,margin:'0 0 20px'}},'Stored in your browser only. Find your key at console.anthropic.com under API Keys.'),
+        React.createElement('label',{style:S.lbl},'Anthropic API Key'),
+        React.createElement('input',{type:'password',value:apiKey,onChange:e=>setApiKey(e.target.value),onKeyDown:e=>e.key==='Enter'&&submit(),placeholder:'sk-ant-...',style:{...S.ta,height:'auto',padding:'11px 13px',marginBottom:16,fontFamily:'monospace'}}),
+        err&&React.createElement('div',{style:{background:'#FFF5F5',border:'1px solid #FEB2B2',borderRadius:3,padding:'9px 13px',marginBottom:14,fontSize:12,color:'#C53030'}},err),
+        React.createElement('button',{onClick:submit,disabled:testing||!apiKey.trim(),style:{background:testing||!apiKey.trim()?'#E2E8F0':'#0056A8',color:testing||!apiKey.trim()?'#A0AEC0':'#FFF',border:'none',padding:'12px 24px',fontFamily:"'Cinzel',serif",fontSize:11,letterSpacing:'0.12em',cursor:testing||!apiKey.trim()?'default':'pointer',borderRadius:3,display:'flex',alignItems:'center',gap:10,width:'100%',justifyContent:'center'}},
+          testing&&React.createElement(Spinner,null),testing?'VERIFYING...':'CONNECT AND CONTINUE'
+        )
+      )
+    )
+  );
+}
+
+function SettingsModal({currentKey,onSave,onClose}){
+  const [tab,setTab]=useState('api');const [apiKey,setApiKey]=useState(currentKey);const [testing,setTesting]=useState(false);const [err,setErr]=useState('');const [ok,setOk]=useState(false);
+  const [pmt,setPmt]=useState(()=>getPmt());const [pmtSaved,setPmtSaved]=useState(false);
+  const saveKey=async()=>{
+    if(!apiKey.trim()||!apiKey.startsWith('sk-')){setErr('Enter a valid key starting with sk-');return;}
+    setErr('');setTesting(true);
+    try{await callClaude('Reply OK',[{type:'text',text:'ping'}],apiKey.trim());setOk(true);setTimeout(()=>onSave(apiKey.trim()),600);}
+    catch(e){setErr('Key failed: '+e.message);}
+    setTesting(false);
+  };
+  const savePayment=()=>{savePmt(pmt);setPmtSaved(true);setTimeout(()=>setPmtSaved(false),1800);};
+  const field=(fid,label,placeholder,multiline)=>React.createElement('div',{style:{marginBottom:12}},
+    React.createElement('label',{style:S.lbl},label),
+    multiline?React.createElement('textarea',{value:pmt[fid]||'',onChange:e=>setPmt(p=>({...p,[fid]:e.target.value})),placeholder,style:{...S.ta,height:72}})
+      :React.createElement('input',{type:'text',value:pmt[fid]||'',onChange:e=>setPmt(p=>({...p,[fid]:e.target.value})),placeholder,style:S.input})
+  );
+  return React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(10,22,40,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:20},onClick:e=>e.target===e.currentTarget&&onClose()},
+    React.createElement('div',{style:{background:'#FFF',borderRadius:4,width:'100%',maxWidth:520,maxHeight:'88vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 24px 64px rgba(0,0,0,0.3)'}},
+      React.createElement('div',{style:{background:'#0A1628',padding:'14px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}},
+        React.createElement('span',{style:{fontFamily:"'Cinzel',serif",fontSize:11,letterSpacing:'0.12em',color:'#FFF'}},'SETTINGS'),
+        React.createElement('button',{onClick:onClose,style:{background:'none',border:'none',color:'rgba(255,255,255,0.5)',cursor:'pointer',fontSize:18,lineHeight:1,padding:'2px 6px'}},'x')
+      ),
+      React.createElement('div',{style:{display:'flex',borderBottom:'1px solid #E2E8F0',flexShrink:0}},
+        [['api','API Key'],['wire','Wire / ACH'],['wise','Wise']].map(([v,l])=>React.createElement('button',{key:v,onClick:()=>setTab(v),style:{padding:'10px 18px',border:'none',borderBottom:'2px solid '+(tab===v?'#0056A8':'transparent'),background:'none',color:tab===v?'#0056A8':'#718096',fontSize:12,cursor:'pointer',fontFamily:"'Open Sans',sans-serif",fontWeight:tab===v?600:400,marginBottom:-1}},l))
+      ),
+      React.createElement('div',{style:{padding:22,overflowY:'auto',flex:1}},
+        tab==='api'&&React.createElement('div',null,
+          React.createElement('label',{style:S.lbl},'Anthropic API Key'),
+          React.createElement('input',{type:'password',value:apiKey,onChange:e=>setApiKey(e.target.value),style:{...S.ta,height:'auto',padding:'10px 13px',marginBottom:12,fontFamily:'monospace'}}),
+          err&&React.createElement('div',{style:{color:'#C53030',fontSize:12,marginBottom:10,background:'#FFF5F5',padding:'7px 11px',borderRadius:2}},err),
+          ok&&React.createElement('div',{style:{color:'#065F46',fontSize:12,marginBottom:10,background:'#ECFDF5',padding:'7px 11px',borderRadius:2}},'Key verified. Saving...'),
+          React.createElement('div',{style:{display:'flex',gap:8,justifyContent:'flex-end'}},
+            React.createElement('button',{onClick:onClose,style:{padding:'8px 16px',border:'1px solid #E2E8F0',background:'#FAFBFC',color:'#4A5568',fontSize:12,cursor:'pointer',borderRadius:3,fontFamily:"'Open Sans',sans-serif"}},'Cancel'),
+            React.createElement('button',{onClick:saveKey,disabled:testing,style:{padding:'8px 16px',background:testing?'#E2E8F0':'#0056A8',color:testing?'#A0AEC0':'#FFF',border:'none',fontSize:11,fontFamily:"'Cinzel',serif",letterSpacing:'0.1em',cursor:testing?'default':'pointer',borderRadius:3,display:'flex',alignItems:'center',gap:8}},
+              testing&&React.createElement(Spinner,null),testing?'VERIFYING...':'SAVE KEY')
+          )
+        ),
+        tab==='wire'&&React.createElement('div',null,
+          React.createElement('p',{style:{fontSize:12,color:'#718096',marginBottom:16,lineHeight:1.6}},'These details appear on Wire and ACH invoices. Stored locally on this device only.'),
+          field('wireBankName','Bank Name','e.g. Chase, Bank of America'),
+          field('wireAccountName','Account Name','e.g. Limitless Sales LLC'),
+          field('wireRoutingNumber','Routing Number ABA','9-digit routing number'),
+          field('wireAccountNumber','Account Number','Your account number'),
+          field('wireAccountType','Account Type','e.g. Checking'),
+          field('wireSwift','SWIFT BIC for international','e.g. CHASUS33 optional'),
+          field('phone','Your Phone Number (optional, appears on invoices when set)','e.g. +1 310 555 0100'),
+          React.createElement('div',{style:{display:'flex',gap:8,justifyContent:'flex-end',marginTop:4}},
+            React.createElement('button',{onClick:savePayment,style:{padding:'8px 18px',background:'#0056A8',color:'#FFF',border:'none',fontSize:11,fontFamily:"'Cinzel',serif",letterSpacing:'0.1em',cursor:'pointer',borderRadius:3}},pmtSaved?'SAVED':'SAVE')
+          )
+        ),
+        tab==='wise'&&React.createElement('div',null,
+          React.createElement('p',{style:{fontSize:12,color:'#718096',marginBottom:16,lineHeight:1.6}},'These details appear on Wise invoices. Stored locally on this device only.'),
+          field('wiseEmail','Wise Account Email','taylor@example.com'),
+          field('wiseAccountName','Account Name','Name on your Wise account'),
+          field('wiseCurrency','Currency','e.g. USD'),
+          field('wiseInstructions','Additional Instructions','Any routing details or notes for international clients',true),
+          React.createElement('div',{style:{display:'flex',gap:8,justifyContent:'flex-end',marginTop:4}},
+            React.createElement('button',{onClick:savePayment,style:{padding:'8px 18px',background:'#0056A8',color:'#FFF',border:'none',fontSize:11,fontFamily:"'Cinzel',serif",letterSpacing:'0.1em',cursor:'pointer',borderRadius:3}},pmtSaved?'SAVED':'SAVE')
+          )
+        )
+      )
+    )
+  );
+}
+
+function Sidebar({open,onToggle,index,activeBriefId,onSelect,onNew,onSettings}){
+  const W=open?228:50;
+  const dot=(s)=>s==='ready'?'#22C55E':s==='blocked'?'#F59E0B':'#94A3B8';
+  return React.createElement('div',{style:{width:W,minWidth:W,background:'#0A1628',display:'flex',flexDirection:'column',transition:'width 0.22s ease',overflow:'hidden',boxShadow:'2px 0 12px rgba(0,0,0,0.2)',zIndex:10,flexShrink:0}},
+    React.createElement('div',{style:{padding:'13px 11px',borderBottom:'1px solid rgba(255,255,255,0.07)',display:'flex',alignItems:'center',justifyContent:'space-between',minHeight:52}},
+      open&&React.createElement('div',null,
+        React.createElement('div',{style:{fontFamily:"'Cinzel',serif",fontSize:11,letterSpacing:'0.18em',color:'#FFF',fontWeight:600}},'SOURCEPOINT'),
+        React.createElement('div',{style:{fontSize:9,color:'rgba(255,255,255,0.3)',marginTop:2}},'INTELLIGENCE BRIEFS')
+      ),
+      React.createElement('button',{onClick:onToggle,style:{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,0.4)',fontSize:16,lineHeight:1,marginLeft:'auto',flexShrink:0,width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center'}},open?'x':'>')
+    ),
+    React.createElement('div',{style:{padding:'9px 8px',borderBottom:'1px solid rgba(255,255,255,0.07)'}},
+      React.createElement('button',{onClick:onNew,title:'New Brief',style:{width:'100%',background:'rgba(0,86,168,0.35)',border:'1px solid rgba(0,86,168,0.5)',color:'#FFF',padding:open?'8px 11px':'8px',borderRadius:3,fontSize:10,fontFamily:"'Cinzel',serif",letterSpacing:'0.1em',cursor:'pointer',display:'flex',alignItems:'center',gap:7,justifyContent:open?'flex-start':'center'}},
+        React.createElement('span',{style:{fontSize:14,lineHeight:1}},'+'),open&&'NEW BRIEF'
+      )
+    ),
+    React.createElement('div',{style:{flex:1,overflowY:'auto',padding:'5px 0'}},
+      index.length===0?React.createElement('div',{style:{padding:'14px 10px',color:'rgba(255,255,255,0.25)',fontSize:11,textAlign:'center'}},open?'No briefs yet':'')
+        :index.map(b=>React.createElement('button',{key:b.id,onClick:()=>onSelect(b.id),title:open?'':b.clientName,style:{width:'100%',background:b.id===activeBriefId?'rgba(0,86,168,0.3)':'transparent',border:'none',textAlign:'left',padding:open?'9px 11px':'9px 0',cursor:'pointer',borderLeft:b.id===activeBriefId?'3px solid #4A9FFF':'3px solid transparent',display:'flex',alignItems:'center',gap:9}},
+          React.createElement('div',{style:{width:7,height:7,borderRadius:'50%',background:dot(b.proposalStatus),flexShrink:0,margin:open?'0':'0 auto'}}),
+          open&&React.createElement('div',{style:{minWidth:0,flex:1}},
+            React.createElement('div',{style:{fontSize:12,color:b.id===activeBriefId?'#FFF':'rgba(255,255,255,0.78)',fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},b.clientName||'Unnamed'),
+            React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.33)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},b.company||dateFmt(b.updatedAt))
+          )
+        ))
+    ),
+    React.createElement('div',{style:{padding:'9px 8px',borderTop:'1px solid rgba(255,255,255,0.07)'}},
+      React.createElement('button',{onClick:onSettings,title:'Settings',style:{width:'100%',background:'none',border:'none',color:'rgba(255,255,255,0.3)',cursor:'pointer',padding:6,display:'flex',alignItems:'center',gap:7,justifyContent:open?'flex-start':'center',fontSize:11,fontFamily:"'Open Sans',sans-serif",borderRadius:2}},
+        React.createElement('span',{style:{fontSize:13}},'o'),open&&'Settings'
+      )
+    )
+  );
+}
+
+function HomeView({onNew,hasAny}){
+  return React.createElement('div',{style:{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:40}},
+    React.createElement('div',{style:{textAlign:'center',maxWidth:440}},
+      React.createElement('div',{style:{fontFamily:"'Cinzel',serif",fontSize:10,letterSpacing:'0.16em',color:'#0056A8',marginBottom:10}},'POST-CALL ANALYSIS ENGINE'),
+      React.createElement('h1',{style:{fontFamily:"'Cinzel',serif",fontSize:20,color:'#1A202C',fontWeight:600,margin:'0 0 12px',lineHeight:1.35}},hasAny?'Select a Brief or Start New':'Build Your First Brief'),
+      React.createElement('p',{style:{color:'#718096',fontSize:13,lineHeight:1.75,margin:'0 0 28px'}},'Paste a call transcript, upload files, add meeting notes, or include website links. The system extracts intelligence and builds a structured brief.'),
+      React.createElement('button',{onClick:onNew,style:{background:'#0056A8',color:'#FFF',border:'none',padding:'12px 28px',fontFamily:"'Cinzel',serif",fontSize:11,letterSpacing:'0.12em',cursor:'pointer',borderRadius:3}},'NEW BRIEF')
+    )
+  );
+}
+
+function NewBriefView({apiKey,onSaved,onCancel}){
+  const [transcript,setTranscript]=useState('');const [notes,setNotes]=useState('');const [mnText,setMnText]=useState('');const [mnImages,setMnImages]=useState([]);
+  const [files,setFiles]=useState([]);const [links,setLinks]=useState([]);const [analyzing,setAnalyzing]=useState(false);const [status,setStatus]=useState('');const [error,setError]=useState('');
+  const hasContent=files.length>0||mnImages.length>0||mnText.trim();
+  const canAnalyze=transcript.trim()||hasContent||links.some(l=>l.url&&l.url.trim());
+  const analyze=async()=>{
+    if(!canAnalyze){setError('Add a transcript, meeting notes, file, or link to continue.');return;}
+    setError('');setAnalyzing(true);
+    let fetchedLinks=[...links];
+    const toFetch=fetchedLinks.filter(l=>l.url&&l.url.trim()&&!l.fetchStatus);
+    if(toFetch.length>0){setStatus('Fetching '+toFetch.length+' link'+(toFetch.length>1?'s':'')+'...');fetchedLinks=await fetchAllLinks(fetchedLinks);}
+    setLinks(fetchedLinks);setStatus('Analyzing...');
+    try{
+      const parts=buildParts(transcript,notes,mnText,mnImages,files,fetchedLinks);
+      const resp=await callClaude(ANALYSIS_SYS,parts,apiKey);
+      const json=extractJSON(resp);
+      if(!json){setError('Analysis could not be parsed. Try again.');setAnalyzing(false);setStatus('');return;}
+      const now=new Date().toISOString();
+      const fetched=fetchedLinks.filter(l=>l.fetchStatus==='fetched').length;
+      const inputNote=[transcript.trim()?'transcript':'',mnText.trim()?'typed meeting notes':'',mnImages.length>0?(mnImages.length+' meeting note photo'+(mnImages.length>1?'s':'')):'',files.length>0?(files.length+' file'+(files.length>1?'s':'')):'',fetched>0?(fetched+' fetched link'+(fetched>1?'s':'')):''].filter(Boolean).join(', ');
+      onSaved({id:uid(),createdAt:now,updatedAt:now,clientName:json.clientName||'',company:json.company||'',product:json.product||'',quantity:json.quantity||'',specifications:json.specifications||'',budgetPerUnit:json.budgetPerUnit||'',destination:json.destination||'',timeline:json.timeline||'',tier:json.tier||'founder',relationshipType:json.relationshipType||'cold',currentSituation:json.currentSituation||'',statedGoals:normaliseGoals(json.statedGoals),productCategories:(json.productCategories||[]).map(c=>({...c,id:uid(),skus:(c.skus||[]).map(s=>({...s,id:uid()}))})),informationGaps:(json.informationGaps||[]).map(g=>({...g,id:uid(),resolved:false})),upsellOpportunities:(json.upsellOpportunities||[]).map(u=>({...u,id:uid(),status:'open'})),proposalStatus:json.proposalStatus||'blocked',proposalBlockers:json.proposalBlockers||[],modules:json.modules||DEFAULT_MODULES,analystNotes:json.analystNotes||'',links:fetchedLinks.filter(l=>l.url&&l.url.trim()).map(l=>({id:l.id||uid(),label:l.label,url:l.url,fetchStatus:l.fetchStatus,fetchedTitle:l.fetchedTitle,fetchError:l.fetchError})),attachmentNames:[...mnImages.map(f=>({name:f.name,type:f.type,size:f.size,kind:'meeting-note-photo'})),...files.map(f=>({name:f.name,type:f.type,size:f.size,kind:f.kind}))],history:[{date:now,type:'initial',note:'Initial analysis from '+(inputNote||'inputs')}]});
+    }catch(e){setError('Something went wrong: '+e.message);}
+    setAnalyzing(false);setStatus('');
+  };
+  return React.createElement('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px'}},
+    React.createElement('div',{style:{maxWidth:780,margin:'0 auto'}},
+      React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}},
+        React.createElement('div',null,React.createElement('div',{style:{fontFamily:"'Cinzel',serif",fontSize:10,letterSpacing:'0.14em',color:'#0056A8',marginBottom:4}},'NEW ENGAGEMENT'),React.createElement('h2',{style:{fontFamily:"'Cinzel',serif",fontSize:17,color:'#1A202C',fontWeight:600,margin:0}},'Build Intelligence Brief')),
+        React.createElement('button',{onClick:onCancel,style:{background:'none',border:'1px solid #E2E8F0',color:'#718096',padding:'7px 14px',fontSize:12,cursor:'pointer',borderRadius:3,fontFamily:"'Open Sans',sans-serif"}},'Cancel')
+      ),
+      React.createElement('div',{style:{marginBottom:14}},
+        React.createElement('label',{style:S.lbl},'Call Transcript ',React.createElement('span',{style:{color:hasContent||links.some(l=>l.url)?'#A0AEC0':'#E53E3E',fontSize:9,letterSpacing:0,textTransform:'none',fontWeight:400}},hasContent||links.some(l=>l.url)?'optional':'required if no notes, files, or links')),
+        React.createElement('textarea',{value:transcript,onChange:e=>setTranscript(e.target.value),placeholder:'Paste the full call transcript here.',style:{...S.ta,height:160},disabled:analyzing}),
+        transcript&&React.createElement('div',{style:{fontSize:10,color:'#A0AEC0',marginTop:2,textAlign:'right'}},transcript.length.toLocaleString()+' characters')
+      ),
+      React.createElement('div',{style:{marginBottom:14}},
+        React.createElement('label',{style:S.lbl},'Meeting Notes ',React.createElement('span',{style:{color:'#A0AEC0',fontWeight:400,textTransform:'none',letterSpacing:0,fontSize:11}},'optional, typed or handwritten photo')),
+        React.createElement(MeetingNotes,{text:mnText,onTextChange:setMnText,images:mnImages,onImagesChange:setMnImages,disabled:analyzing})
+      ),
+      React.createElement('div',{style:{marginBottom:14}},
+        React.createElement('label',{style:S.lbl},'Operator Notes ',React.createElement('span',{style:{color:'#A0AEC0',fontWeight:400,textTransform:'none',letterSpacing:0,fontSize:11}},'optional')),
+        React.createElement('textarea',{value:notes,onChange:e=>setNotes(e.target.value),placeholder:'Red flags, buying signals, gut reads on budget or commitment.',style:{...S.ta,height:80},disabled:analyzing})
+      ),
+      React.createElement('div',{style:{marginBottom:14}},
+        React.createElement('label',{style:S.lbl},'Attachments ',React.createElement('span',{style:{color:'#A0AEC0',fontWeight:400,textTransform:'none',letterSpacing:0,fontSize:11}},'optional, spec sheets, proposals, emails, reports')),
+        React.createElement(FileUpload,{files,onFilesChange:setFiles,disabled:analyzing})
+      ),
+      React.createElement('div',{style:{marginBottom:22}},
+        React.createElement('label',{style:S.lbl},'Website Links ',React.createElement('span',{style:{color:'#A0AEC0',fontWeight:400,textTransform:'none',letterSpacing:0,fontSize:11}},'fetched and read automatically')),
+        React.createElement(LinksSection,{links,onLinksChange:setLinks,disabled:analyzing})
+      ),
+      error&&React.createElement('div',{style:{background:'#FFF5F5',border:'1px solid #FEB2B2',borderRadius:3,padding:'10px 14px',marginBottom:14,fontSize:13,color:'#C53030'}},error),
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:12}},
+        React.createElement('button',{onClick:analyze,disabled:analyzing||!canAnalyze,style:{background:analyzing||!canAnalyze?'#E2E8F0':'#0056A8',color:analyzing||!canAnalyze?'#A0AEC0':'#FFF',border:'none',padding:'12px 24px',fontFamily:"'Cinzel',serif",fontSize:11,letterSpacing:'0.12em',cursor:analyzing||!canAnalyze?'default':'pointer',borderRadius:3,display:'flex',alignItems:'center',gap:10}},
+          analyzing&&React.createElement(Spinner,null),analyzing?'ANALYZING...':'BUILD BRIEF'
+        ),
+        analyzing&&React.createElement('span',{style:{fontSize:12,color:'#718096'}},status||'Working...',' Do not close the window.')
+      )
+    )
+  );
+}
+
+function UpdateModal({brief,apiKey,onApply,onClose}){
+  const [type,setType]=useState('transcript');const [content,setContent]=useState('');const [mnText,setMnText]=useState('');const [mnImages,setMnImages]=useState([]);
+  const [files,setFiles]=useState([]);const [links,setLinks]=useState(brief.links||[]);const [analyzing,setAnalyzing]=useState(false);const [status,setStatus]=useState('');const [error,setError]=useState('');
+  const apply=async()=>{
+    if(!content.trim()&&!mnText.trim()&&mnImages.length===0&&files.length===0&&!links.some(l=>l.url&&l.url.trim())){setError('Add content or files before applying.');return;}
+    setError('');setAnalyzing(true);
+    let fetchedLinks=[...links];
+    const toFetch=fetchedLinks.filter(l=>l.url&&l.url.trim()&&!l.fetchStatus);
+    if(toFetch.length>0){setStatus('Fetching...');fetchedLinks=await fetchAllLinks(fetchedLinks);}
+    setLinks(fetchedLinks);setStatus('Analyzing...');
+    try{
+      const summary='EXISTING BRIEF:\nClient: '+brief.clientName+' / '+brief.company+'\nProduct: '+brief.product+'\nSituation: '+brief.currentSituation+'\nGoals: '+((brief.statedGoals||[]).map?brief.statedGoals.map(g=>g.text).join('; '):brief.statedGoals)+'\nOpen Gaps: '+((brief.informationGaps||[]).filter(g=>!g.resolved).map(g=>g.field).join(', ')||'None')+'\nStatus: '+brief.proposalStatus;
+      const newText=summary+'\n\nNEW '+(type==='transcript'?'CALL TRANSCRIPT':'NOTES / UPDATES')+':\n'+content.trim();
+      const parts=buildParts(newText,'',mnText,mnImages,files,fetchedLinks);
+      const resp=await callClaude(ANALYSIS_SYS,parts,apiKey);
+      const json=extractJSON(resp);
+      if(!json){setError('Analysis failed. Try again.');setAnalyzing(false);setStatus('');return;}
+      const now=new Date().toISOString();
+      const fetched=fetchedLinks.filter(l=>l.fetchStatus==='fetched').length;
+      const inputNote=[content.trim()?type==='transcript'?'follow-up transcript':'notes':'',mnText.trim()?'meeting notes':'',mnImages.length>0?(mnImages.length+' photo'+(mnImages.length>1?'s':'')):'',files.length>0?(files.length+' file'+(files.length>1?'s':'')):'',fetched>0?(fetched+' link'+(fetched>1?'s':'')):''].filter(Boolean).join(' + ');
+      onApply({...brief,updatedAt:now,clientName:json.clientName||brief.clientName,company:json.company||brief.company,product:json.product||brief.product,quantity:json.quantity||brief.quantity,specifications:json.specifications||brief.specifications,budgetPerUnit:json.budgetPerUnit||brief.budgetPerUnit,destination:json.destination||brief.destination,timeline:json.timeline||brief.timeline,tier:json.tier||brief.tier,relationshipType:json.relationshipType||brief.relationshipType,currentSituation:json.currentSituation||brief.currentSituation,statedGoals:normaliseGoals(json.statedGoals)||brief.statedGoals,productCategories:(json.productCategories||[]).map(c=>({...c,id:uid(),skus:(c.skus||[]).map(s=>({...s,id:uid()}))}))||brief.productCategories||[],informationGaps:(json.informationGaps||[]).map(g=>({...g,id:uid(),resolved:false})),upsellOpportunities:(json.upsellOpportunities||[]).map(u=>({...u,id:uid(),status:'open'})),proposalStatus:json.proposalStatus||brief.proposalStatus,proposalBlockers:json.proposalBlockers||brief.proposalBlockers,modules:json.modules||brief.modules,analystNotes:(()=>{const existing=(brief.analystNotes||'').trim();const incoming=(json.analystNotes||'').trim();if(!incoming) return existing;const stamp=new Date(now).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});const newEntry='['+stamp+']\n'+incoming;return existing?existing+'\n\n'+newEntry:newEntry;})(),links:fetchedLinks.filter(l=>l.url&&l.url.trim()).map(l=>({id:l.id||uid(),label:l.label,url:l.url,fetchStatus:l.fetchStatus,fetchedTitle:l.fetchedTitle,fetchError:l.fetchError})),attachmentNames:[...(brief.attachmentNames||[]),...mnImages.map(f=>({name:f.name,type:f.type,size:f.size,kind:'meeting-note-photo'})),...files.map(f=>({name:f.name,type:f.type,size:f.size,kind:f.kind}))],history:[...(brief.history||[]),{date:now,type,note:'Updated from '+(inputNote||'new inputs')}]});
+    }catch(e){setError('Something went wrong: '+e.message);}
+    setAnalyzing(false);setStatus('');
+  };
+  return React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(10,22,40,0.65)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100,padding:20},onClick:e=>e.target===e.currentTarget&&onClose()},
+    React.createElement('div',{style:{background:'#FFF',borderRadius:4,width:'100%',maxWidth:600,maxHeight:'90vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 24px 64px rgba(0,0,0,0.28)'}},
+      React.createElement('div',{style:{background:'#0A1628',padding:'14px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}},
+        React.createElement('div',null,React.createElement('div',{style:{fontFamily:"'Cinzel',serif",fontSize:12,letterSpacing:'0.12em',color:'#FFF'}},'UPDATE BRIEF'),React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.38)',marginTop:2}},brief.clientName+(brief.company?' - '+brief.company:''))),
+        React.createElement('button',{onClick:onClose,style:{background:'none',border:'none',color:'rgba(255,255,255,0.5)',cursor:'pointer',fontSize:20,lineHeight:1,padding:'2px 6px'}},'x')
+      ),
+      React.createElement('div',{style:{padding:20,overflowY:'auto',flex:1}},
+        React.createElement('div',{style:{display:'flex',gap:8,marginBottom:13}},
+          [['transcript','Follow-Up Transcript'],['notes','Notes / Resolved Gaps']].map(([v,l])=>React.createElement('button',{key:v,onClick:()=>setType(v),style:{padding:'7px 13px',border:'1px solid '+(type===v?'#0056A8':'#E2E8F0'),background:type===v?'#EBF4FF':'#FAFBFC',color:type===v?'#0056A8':'#718096',fontSize:12,cursor:'pointer',borderRadius:3,fontFamily:"'Open Sans',sans-serif",fontWeight:type===v?600:400}},l))
+        ),
+        React.createElement('textarea',{value:content,onChange:e=>setContent(e.target.value),placeholder:type==='transcript'?'Paste the follow-up call transcript.':'Add resolved gap answers, updated specs, or new context.',style:{...S.ta,height:120,marginBottom:14},disabled:analyzing}),
+        React.createElement('div',{style:{marginBottom:13}},React.createElement('label',{style:S.lbl},'Meeting Notes ',React.createElement('span',{style:{color:'#A0AEC0',fontWeight:400,textTransform:'none',letterSpacing:0,fontSize:11}},'optional')),React.createElement(MeetingNotes,{text:mnText,onTextChange:setMnText,images:mnImages,onImagesChange:setMnImages,disabled:analyzing})),
+        React.createElement('div',{style:{marginBottom:13}},React.createElement('label',{style:S.lbl},'Additional Files ',React.createElement('span',{style:{color:'#A0AEC0',fontWeight:400,textTransform:'none',letterSpacing:0,fontSize:11}},'optional')),React.createElement(FileUpload,{files,onFilesChange:setFiles,disabled:analyzing})),
+        React.createElement('div',{style:{marginBottom:14}},React.createElement('label',{style:S.lbl},'Website Links'),React.createElement(LinksSection,{links,onLinksChange:setLinks,disabled:analyzing})),
+        error&&React.createElement('div',{style:{color:'#C53030',fontSize:12,marginBottom:10,background:'#FFF5F5',padding:'8px 12px',borderRadius:2}},error),
+        React.createElement('div',{style:{display:'flex',gap:8,justifyContent:'flex-end',alignItems:'center'}},
+          analyzing&&React.createElement('span',{style:{fontSize:11,color:'#718096'}},status),
+          React.createElement('button',{onClick:onClose,style:{padding:'9px 17px',border:'1px solid #E2E8F0',background:'#FAFBFC',color:'#4A5568',fontSize:12,cursor:'pointer',borderRadius:3,fontFamily:"'Open Sans',sans-serif"}},'Cancel'),
+          React.createElement('button',{onClick:apply,disabled:analyzing,style:{padding:'9px 18px',background:analyzing?'#E2E8F0':'#0056A8',color:analyzing?'#A0AEC0':'#FFF',border:'none',fontSize:11,fontFamily:"'Cinzel',serif",letterSpacing:'0.1em',cursor:analyzing?'default':'pointer',borderRadius:3,display:'flex',alignItems:'center',gap:8}},
+            analyzing&&React.createElement(Spinner,null),analyzing?'ANALYZING...':'APPLY UPDATE')
+        )
+      )
+    )
+  );
+}
+
+function ProposalModal({brief,pricing,apiKey,onClose}){
+  const [generating,setGenerating]=useState(true);const [proposal,setProposal]=useState('');const [error,setError]=useState('');const [copied,setCopied]=useState(false);
+  const generate=useCallback(async()=>{
+    setGenerating(true);setError('');
+    try{
+      const relMap={cold:'Cold / New',referral:'Referral',friends_family:'Friends and Family',returning:'Returning Client'};
+      const pkgPrice=brief.tier==='corporate'?3500:brief.relationshipType==='returning'?950:1200;
+      const addons=ADDON_META.filter(m=>brief.modules&&brief.modules[m.id]).map(m=>m.label+': '+fmt(ADDON_RATES[brief.tier||'founder'][m.id])).join(', ');
+      const brandServices=BRAND_META.filter(m=>brief.modules&&brief.modules[m.id]).map(m=>m.label+': '+fmt(BRAND_RATES[m.id])).join(', ');
+      const briefData=['CLIENT NAME: '+(brief.clientName||'Not confirmed'),'COMPANY: '+(brief.company||'N/A'),'PRODUCT: '+(brief.product||'Not confirmed'),'QUANTITY: '+(brief.quantity||'Not confirmed'),'SPECIFICATIONS: '+(brief.specifications||'Not confirmed'),'BUDGET PER UNIT: '+(brief.budgetPerUnit||'Not confirmed'),'DESTINATION: '+(brief.destination||'Not confirmed'),'TIMELINE: '+(brief.timeline||'Not confirmed'),'CLIENT RELATIONSHIP: '+(relMap[brief.relationshipType]||'New'),'TIER: '+(brief.tier==='corporate'?'Corporate':'Founder'),'PACKAGE FEE: '+fmt(pkgPrice)+(brief.relationshipType==='returning'?' loyalty rate':''),'ADD-ONS: '+(addons||'None'),'BRAND SERVICES: '+(brandServices||'None'),'TOTAL FEE: '+fmt(pricing.total),'STAGE 1 DEPOSIT: '+fmt(pricing.stage1),'STAGE 2 BALANCE: '+fmt(pricing.stage2),'STATED GOALS: '+((Array.isArray(brief.statedGoals)?brief.statedGoals.map(g=>g.text).join('; '):brief.statedGoals)||''),'PRODUCT CATEGORIES TABLE:\nCategory | SKU | Quantity | Phase | Notes\n'+((brief.productCategories||[]).flatMap(c=>(c.skus||[]).map((s,si)=>(si===0?c.category:'')+'  |  '+(s.sku||'')+'  |  '+(s.quantity||'TBD')+'  |  '+(s.phase||'Phase 1')+'  |  '+(s.notes||''))).join('\n')||'Not specified'),'CURRENT SITUATION: '+brief.currentSituation,'ANALYST NOTES: '+brief.analystNotes].join('\n');
+      const resp=await callClaude(PROPOSAL_SYS,[{type:'text',text:'Generate a complete sourcing proposal using this confirmed brief data:\n\n'+briefData}],apiKey);
+      setProposal(resp);
+    }catch(e){setError('Generation failed: '+e.message);}
+    setGenerating(false);
+  },[brief,pricing,apiKey]);
+  useEffect(()=>{generate();},[]);
+  return React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(10,22,40,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100,padding:20},onClick:e=>e.target===e.currentTarget&&onClose()},
+    React.createElement('div',{style:{background:'#FFF',borderRadius:4,width:'100%',maxWidth:720,maxHeight:'92vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 24px 64px rgba(0,0,0,0.3)'}},
+      React.createElement('div',{style:{background:'#0A1628',padding:'14px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}},
+        React.createElement('div',null,React.createElement('div',{style:{fontFamily:"'Cinzel',serif",fontSize:12,letterSpacing:'0.12em',color:'#FFF'}},'SOURCING PROPOSAL'),React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.38)',marginTop:2}},brief.clientName+(brief.company?' - '+brief.company:''))),
+        React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center'}},
+          !generating&&!error&&React.createElement('button',{onClick:()=>{navigator.clipboard.writeText(proposal);setCopied(true);setTimeout(()=>setCopied(false),2000);},style:{background:copied?'#065F46':'rgba(255,255,255,0.1)',border:'1px solid rgba(255,255,255,0.2)',color:'#FFF',padding:'6px 14px',fontSize:11,fontFamily:"'Cinzel',serif",letterSpacing:'0.08em',cursor:'pointer',borderRadius:3}},copied?'COPIED':'COPY PROPOSAL'),
+          !generating&&!error&&React.createElement('button',{onClick:generate,style:{background:'none',border:'1px solid rgba(255,255,255,0.2)',color:'rgba(255,255,255,0.6)',padding:'6px 12px',fontSize:10,cursor:'pointer',borderRadius:3,fontFamily:"'Open Sans',sans-serif"}},'Regenerate'),
+          React.createElement('button',{onClick:onClose,style:{background:'none',border:'none',color:'rgba(255,255,255,0.5)',cursor:'pointer',fontSize:20,lineHeight:1,padding:'2px 6px'}},'x')
+        )
+      ),
+      React.createElement('div',{style:{flex:1,overflowY:'auto',padding:24}},
+        generating&&React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'60px 20px',gap:16}},
+          React.createElement('div',{style:{width:28,height:28,border:'3px solid #E2E8F0',borderTopColor:'#0056A8',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}),
+          React.createElement('div',{style:{fontFamily:"'Cinzel',serif",fontSize:11,letterSpacing:'0.12em',color:'#718096'}},'GENERATING PROPOSAL'),
+          React.createElement('div',{style:{fontSize:12,color:'#A0AEC0'}},'20 to 40 seconds. Do not close the window.')
+        ),
+        error&&React.createElement('div',{style:{background:'#FFF5F5',border:'1px solid #FEB2B2',borderRadius:3,padding:'14px 18px',margin:'20px 0'}},
+          React.createElement('div',{style:{fontSize:13,color:'#C53030',marginBottom:10}},error),
+          React.createElement('button',{onClick:generate,style:{background:'#0056A8',color:'#FFF',border:'none',padding:'8px 16px',fontFamily:"'Cinzel',serif",fontSize:10,letterSpacing:'0.1em',cursor:'pointer',borderRadius:3}},'TRY AGAIN')
+        ),
+        !generating&&!error&&proposal&&React.createElement('div',null,
+          React.createElement('div',{style:{background:'#F7FAFC',border:'1px solid #E2E8F0',borderRadius:3,padding:'10px 14px',marginBottom:18,fontSize:11,color:'#718096'}},'Proposal generated. Review before sending. Verify all fees match the brief.'),
+          React.createElement('pre',{style:{fontFamily:"'Open Sans',sans-serif",fontSize:13,lineHeight:1.8,color:'#2D3748',whiteSpace:'pre-wrap',wordBreak:'break-word',margin:0}},proposal)
+        )
+      )
+    )
+  );
+}
+
+function InvoiceModal({brief,pricing,onClose}){
+  const [stage,setStage]=useState('s1');
+  const [payMethod,setPayMethod]=useState('wire');
+  const [orderValue,setOrderValue]=useState('');
+  const [shippingValue,setShippingValue]=useState('');
+  const [dueDate,setDueDate]=useState('Upon receipt');
+  const [stripeLink,setStripeLink]=useState('');
+  const [clientName,setClientName]=useState(brief.clientName||'');
+  const [clientCompany,setClientCompany]=useState(brief.company||'');
+  const [clientEmail,setClientEmail]=useState('');
+  const [clientPhone,setClientPhone]=useState('');
+  const [downloading,setDownloading]=useState(false);
+  const [copied,setCopied]=useState(false);
+  const [invNum]=useState(()=>nextInvoiceNum());
+  const pmt=getPmt();
+  const today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const coordHalf=()=>{const ov=parseFloat(orderValue)||0;const sv=parseFloat(shippingValue)||0;return Math.max(Math.round((ov+sv)*0.05),250);};
+  const lineItems=()=>{
+    if(stage==='s1') return [{desc:'Standard Sourcing Package - Stage 1 Deposit (50% of sourcing fee)',amt:pricing.stage1}];
+    if(stage==='s2'){const items=[{desc:'Standard Sourcing Package - Stage 2 Balance (remaining 50% of sourcing fee)',amt:pricing.stage2}];ADDON_META.forEach(m=>{if(brief.modules&&brief.modules[m.id]) items.push({desc:m.label,amt:ADDON_RATES[brief.tier||'founder'][m.id]});});BRAND_META.forEach(m=>{if(brief.modules&&brief.modules[m.id]) items.push({desc:m.label,amt:BRAND_RATES[m.id]});});return items;}
+    if(stage==='s3'){const ov=parseFloat(orderValue)||0;const sv=parseFloat(shippingValue)||0;return [{desc:'Coordination Fee Stage 3 - 5% of '+fmt(ov)+' order value plus '+fmt(sv)+' shipping (first installment of 10% total)',amt:coordHalf()}];}
+    if(stage==='s4'){const ov=parseFloat(orderValue)||0;const sv=parseFloat(shippingValue)||0;return [{desc:'Coordination Fee Stage 4 - 5% of '+fmt(ov)+' order value plus '+fmt(sv)+' shipping (final installment of 10% total)',amt:coordHalf()}];}
+    return [];
+  };
+  const total=()=>lineItems().reduce((s,l)=>s+l.amt,0);
+  const needsOrderValue=stage==='s3'||stage==='s4';
+  const stageLabel=stage==='s1'?'Stage 1 Deposit':stage==='s2'?'Stage 2 Balance':stage==='s3'?'Stage 3 Coordination First Installment':'Stage 4 Coordination Final Installment';
+  const coordNote=(stage==='s3'||stage==='s4')?'Coordination fee is 10% of confirmed order value plus shipping, billed in two equal installments.':null;
+  const downloadInvoice=async()=>{
+    setDownloading(true);
+    try{
+      const payload={
+        invoiceNumber:'SP-'+invNum,
+        date:today,
+        dueDate,
+        clientName,
+        clientCompany,
+        clientAddress,
+        clientEmail,
+        clientPhone,
+        lineItems:lineItems(),
+        total:total(),
+        paymentMethod:payMethod,
+        stripeLink:payMethod==='stripe'?stripeLink:null,
+        wireDetails:payMethod==='wire'?{bankName:pmt.wireBankName,accountName:pmt.wireAccountName,routingNumber:pmt.wireRoutingNumber,accountNumber:pmt.wireAccountNumber,accountType:pmt.wireAccountType,swift:pmt.wireSwift}:null,
+        wiseDetails:payMethod==='wise'?{email:pmt.wiseEmail,accountName:pmt.wiseAccountName,currency:pmt.wiseCurrency,instructions:pmt.wiseInstructions}:null,
+        coordNote
+      };
+      const res=await fetch('/.netlify/functions/generate-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.message||'Generation failed');}
+      const blob=await res.blob();
+      const url=window.URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url;
+      const n=(clientName||brief.clientName||'Client').replace(/[^a-zA-Z0-9\s]/g,'').replace(/\s+/g,'_');
+      a.download='SP_Invoice_'+n+'_SP-'+invNum+'.docx';
+      document.body.appendChild(a);a.click();
+      window.URL.revokeObjectURL(url);document.body.removeChild(a);
+    }catch(e){alert('Download failed: '+e.message);}
+    setDownloading(false);
+  };
+  const payInstructions=()=>{
+    if(payMethod==='stripe') return stripeLink?'Pay via Stripe: '+stripeLink+'\nProcessing fees are the responsibility of the client.':'No Stripe link entered.';
+    if(payMethod==='wire'){if(!pmt.wireBankName) return 'Wire transfer details not configured. Go to Settings.';return 'Bank: '+pmt.wireBankName+'\nAccount Name: '+(pmt.wireAccountName||'')+'\nRouting ABA: '+(pmt.wireRoutingNumber||'')+'\nAccount Number: '+(pmt.wireAccountNumber||'')+'\nAccount Type: '+(pmt.wireAccountType||'')+(pmt.wireSwift?'\nSWIFT BIC: '+pmt.wireSwift:'');}
+    if(payMethod==='wise'){if(!pmt.wiseEmail) return 'Wise details not configured. Go to Settings.';return 'Wise Email: '+pmt.wiseEmail+'\nAccount Name: '+(pmt.wiseAccountName||'')+'\nCurrency: '+(pmt.wiseCurrency||'USD')+(pmt.wiseInstructions?'\n'+pmt.wiseInstructions:'');}
+    return '';
+  };
+  const buildText=()=>{const items=lineItems();return ['INVOICE','Taylor Carson / SourcePoint','sourcepointco.com | hello@sourcepointco.com','','Invoice Number: SP-'+invNum,'Date: '+today,'Due: '+dueDate,'','Bill To:',clientName+(clientCompany?'\n'+clientCompany:'')+(clientAddress?'\n'+clientAddress:'')+(clientEmail?'\n'+clientEmail:'')+(clientPhone?'\n'+clientPhone:''),'','RE: '+(brief.product||'Sourcing Engagement')+' - '+stageLabel,'','DESCRIPTION                                                 AMOUNT','-------------------------------------------------------------------',...items.map(l=>l.desc+'  '+fmt(l.amt)),'-------------------------------------------------------------------','TOTAL DUE: '+fmt(total()),'','Payment Instructions:',payInstructions(),'','Thank you for your business.','SourcePoint | U.S.-Founded. China-Based. Real Factory Access.'].join('\n');};
+  const items=lineItems();
+  return React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(10,22,40,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100,padding:20},onClick:e=>e.target===e.currentTarget&&onClose()},
+    React.createElement('div',{style:{background:'#FFF',borderRadius:4,width:'100%',maxWidth:720,maxHeight:'92vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 24px 64px rgba(0,0,0,0.3)'}},
+      React.createElement('div',{style:{background:'#0A1628',padding:'14px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}},
+        React.createElement('div',null,React.createElement('div',{style:{fontFamily:"'Cinzel',serif",fontSize:12,letterSpacing:'0.12em',color:'#FFF'}},'INVOICE GENERATOR'),React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.38)',marginTop:2}},brief.clientName+(brief.company?' - '+brief.company:''))),
+        React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center'}},
+          React.createElement('button',{onClick:()=>{navigator.clipboard.writeText(buildText());setCopied(true);setTimeout(()=>setCopied(false),2000);},style:{background:copied?'#065F46':'rgba(255,255,255,0.1)',border:'1px solid rgba(255,255,255,0.2)',color:'#FFF',padding:'6px 14px',fontSize:11,fontFamily:"'Cinzel',serif",letterSpacing:'0.08em',cursor:'pointer',borderRadius:3}},copied?'COPIED':'COPY TEXT'),
+          React.createElement('button',{onClick:downloadInvoice,disabled:downloading,style:{background:downloading?'rgba(255,255,255,0.1)':'rgba(0,86,168,0.8)',border:'1px solid rgba(0,86,168,0.6)',color:'#FFF',padding:'6px 14px',fontSize:11,fontFamily:"'Cinzel',serif",letterSpacing:'0.08em',cursor:downloading?'default':'pointer',borderRadius:3,display:'flex',alignItems:'center',gap:6}},downloading&&React.createElement(Spinner,null),downloading?'GENERATING...':'DOWNLOAD DOCX'),
+          React.createElement('button',{onClick:onClose,style:{background:'none',border:'none',color:'rgba(255,255,255,0.5)',cursor:'pointer',fontSize:20,lineHeight:1,padding:'2px 6px'}},'x')
+        )
+      ),
+      React.createElement('div',{style:{flex:1,overflowY:'auto',padding:22}},
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:18}},
+          React.createElement('div',null,React.createElement('label',{style:S.lbl},'Invoice Stage'),React.createElement('select',{value:stage,onChange:e=>setStage(e.target.value),style:{...S.sel,width:'100%',padding:'8px 10px',fontSize:12}},React.createElement('option',{value:'s1'},'Stage 1 Deposit ('+fmt(pricing.stage1)+')'),React.createElement('option',{value:'s2'},'Stage 2 Balance ('+fmt(pricing.stage2)+')'),React.createElement('option',{value:'s3'},'Stage 3 Coordination First Installment (5% of order)'),React.createElement('option',{value:'s4'},'Stage 4 Coordination Final Installment (5% of order)'))),
+          React.createElement('div',null,React.createElement('label',{style:S.lbl},'Payment Method'),React.createElement('select',{value:payMethod,onChange:e=>setPayMethod(e.target.value),style:{...S.sel,width:'100%',padding:'8px 10px',fontSize:12}},React.createElement('option',{value:'wire'},'Wire Transfer / ACH'),React.createElement('option',{value:'wise'},'Wise (international)'),React.createElement('option',{value:'stripe'},'Stripe Payment Link'))),
+          React.createElement('div',null,React.createElement('label',{style:S.lbl},'Due Date'),React.createElement('input',{type:'text',value:dueDate,onChange:e=>setDueDate(e.target.value),style:{...S.input,padding:'8px 10px',fontSize:12}})),
+          needsOrderValue&&React.createElement('div',null,React.createElement('label',{style:S.lbl},'Confirmed Order Value USD'),React.createElement('input',{type:'number',value:orderValue,onChange:e=>setOrderValue(e.target.value),placeholder:'e.g. 12000',style:{...S.input,padding:'8px 10px',fontSize:12}})),
+          needsOrderValue&&React.createElement('div',null,React.createElement('label',{style:S.lbl},'Confirmed Shipping Cost USD'),React.createElement('input',{type:'number',value:shippingValue,onChange:e=>setShippingValue(e.target.value),placeholder:'e.g. 1500',style:{...S.input,padding:'8px 10px',fontSize:12}})),
+          payMethod==='stripe'&&React.createElement('div',{style:{gridColumn:'1 / -1'}},React.createElement('label',{style:S.lbl},'Stripe Payment Link'),React.createElement('input',{type:'url',value:stripeLink,onChange:e=>setStripeLink(e.target.value),placeholder:'https://buy.stripe.com/...',style:{...S.input,padding:'8px 10px',fontSize:12}}),React.createElement('div',{style:{fontSize:10,color:'#F59E0B',marginTop:4}},'Processing fees are the responsibility of the client and will be applied at Stripe checkout.'))
+        ),
+        React.createElement('div',{style:{background:'#F7FAFC',border:'1px solid #E2E8F0',borderRadius:3,padding:14,marginBottom:18}},
+          React.createElement('div',{style:{fontSize:10,fontWeight:700,color:'#6B7280',letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:10}},'Client Contact Information'),
+          React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}},
+            React.createElement('div',null,React.createElement('label',{style:S.lbl},'Client Name'),React.createElement('input',{type:'text',value:clientName,onChange:e=>setClientName(e.target.value),placeholder:'Full name',style:{...S.input,padding:'8px 10px',fontSize:12}})),
+            React.createElement('div',null,React.createElement('label',{style:S.lbl},'Company'),React.createElement('input',{type:'text',value:clientCompany,onChange:e=>setClientCompany(e.target.value),placeholder:'Company name or N/A',style:{...S.input,padding:'8px 10px',fontSize:12}})),
+            React.createElement('div',{style:{gridColumn:'1 / -1'}},React.createElement('label',{style:S.lbl},'Mailing Address'),React.createElement('input',{type:'text',value:clientAddress,onChange:e=>setClientAddress(e.target.value),placeholder:'Street, City, State, ZIP (optional)',style:{...S.input,padding:'8px 10px',fontSize:12}})),
+            React.createElement('div',null,React.createElement('label',{style:S.lbl},'Email'),React.createElement('input',{type:'email',value:clientEmail,onChange:e=>setClientEmail(e.target.value),placeholder:'client@email.com',style:{...S.input,padding:'8px 10px',fontSize:12}})),
+            React.createElement('div',null,React.createElement('label',{style:S.lbl},'Phone'),React.createElement('input',{type:'text',value:clientPhone,onChange:e=>setClientPhone(e.target.value),placeholder:'Optional',style:{...S.input,padding:'8px 10px',fontSize:12}}))
+          )
+        ),
+        React.createElement('div',{style:{border:'1px solid #E2E8F0',borderRadius:3,overflow:'hidden'}},
+          React.createElement('div',{style:{background:'#0056A8',padding:'18px 22px',display:'flex',justifyContent:'space-between',alignItems:'flex-start'}},
+            React.createElement('div',null,React.createElement('div',{style:{fontFamily:"'Cinzel',serif",fontSize:16,fontWeight:700,color:'#FFF',letterSpacing:'0.1em'}},'INVOICE'),React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.7)',marginTop:4}},'Taylor Carson / SourcePoint'),React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.55)',marginTop:2}},'hello@sourcepointco.com | sourcepointco.com')),
+            React.createElement('div',{style:{textAlign:'right'}},React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.7)'}},'Invoice No.'),React.createElement('div',{style:{fontFamily:"'Cinzel',serif",fontSize:14,color:'#FFF',fontWeight:600}},'SP-'+invNum),React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.55)',marginTop:4}},today),React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.55)'}},'Due: '+dueDate))
+          ),
+          React.createElement('div',{style:{padding:'18px 22px'}},
+            React.createElement('div',{style:{marginBottom:18,paddingBottom:14,borderBottom:'1px solid #EDF2F7'}},React.createElement('div',{style:S.slbl},'Bill To'),React.createElement('div',{style:{fontSize:13,fontWeight:600,color:'#1A202C'}},clientName||'Client Name'),clientCompany&&React.createElement('div',{style:{fontSize:12,color:'#4A5568'}},clientCompany),clientAddress&&React.createElement('div',{style:{fontSize:11,color:'#718096'}},clientAddress),clientEmail&&React.createElement('div',{style:{fontSize:11,color:'#718096'}},clientEmail),clientPhone&&React.createElement('div',{style:{fontSize:11,color:'#718096'}},clientPhone),React.createElement('div',{style:{fontSize:11,color:'#718096',marginTop:4}},'RE: '+(brief.product||'Sourcing Engagement')+' - '+stageLabel)),
+            React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',marginBottom:14}},
+              React.createElement('thead',null,React.createElement('tr',{style:{borderBottom:'2px solid #E2E8F0'}},React.createElement('th',{style:{textAlign:'left',padding:'6px 0',fontSize:10,fontWeight:700,color:'#A0AEC0',letterSpacing:'0.1em',textTransform:'uppercase'}},'Description'),React.createElement('th',{style:{textAlign:'right',padding:'6px 0',fontSize:10,fontWeight:700,color:'#A0AEC0',letterSpacing:'0.1em',textTransform:'uppercase',width:100}},'Amount'))),
+              React.createElement('tbody',null,items.map((l,i)=>React.createElement('tr',{key:i,style:{borderBottom:'1px solid #F7FAFC'}},React.createElement('td',{style:{padding:'10px 0',fontSize:13,color:'#2D3748',lineHeight:1.5}},l.desc),React.createElement('td',{style:{padding:'10px 0',fontSize:13,color:'#2D3748',fontWeight:600,textAlign:'right'}},fmt(l.amt))))),
+              React.createElement('tfoot',null,React.createElement('tr',{style:{borderTop:'2px solid #2D3748'}},React.createElement('td',{style:{padding:'12px 0',fontFamily:"'Cinzel',serif",fontSize:12,fontWeight:700,color:'#1A202C'}},'TOTAL DUE'),React.createElement('td',{style:{padding:'12px 0',fontFamily:"'Cinzel',serif",fontSize:18,fontWeight:700,color:'#0056A8',textAlign:'right'}},fmt(total()))))
+            ),
+            React.createElement('div',{style:{background:'#F7FAFC',border:'1px solid #E2E8F0',borderRadius:3,padding:'13px 15px'}},React.createElement('div',{style:S.slbl},'Payment Instructions'),React.createElement('pre',{style:{fontSize:12,color:'#2D3748',lineHeight:1.8,whiteSpace:'pre-wrap',fontFamily:"'Open Sans',sans-serif",margin:0}},payInstructions()))
+          )
+        )
+      )
+    )
+  );
+}
+
+function BriefView({initialBrief,apiKey,onUpdated,onDeleted}){
+  const [b,setB]=useState(initialBrief);
+  const [showUpdate,setShowUpdate]=useState(false);
+  const [showProposal,setShowProposal]=useState(false);
+  const [showInvoice,setShowInvoice]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const [downloading,setDownloading]=useState(false);
+  const downloadWordDoc=async()=>{
+    setDownloading(true);
+    try{
+      const pricing=calcPricing(b.tier,{...(b.modules||DEFAULT_MODULES),categories:b.productCategories||[]},b.relationshipType);
+      const res=await fetch('/.netlify/functions/generate-proposal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brief:b,pricing})});
+      if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.message||'Generation failed');}
+      const blob=await res.blob();
+      const url=window.URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url;
+      const n=(b.clientName||'Client').replace(/[^a-zA-Z0-9\s]/g,'').replace(/\s+/g,'_');
+      a.download='SP_Proposal_'+n+'_'+new Date().toISOString().split('T')[0]+'.docx';
+      document.body.appendChild(a);a.click();
+      window.URL.revokeObjectURL(url);document.body.removeChild(a);
+    }catch(e){alert('Download failed: '+e.message);}
+    setDownloading(false);
+  };
+  const [saved,setSaved]=useState(false);
+  const [copied,setCopied]=useState(false);
+  const [confirmDelete,setConfirmDelete]=useState(false);
+  const saveTimer=useRef(null);
+  const save=useCallback((updated)=>{const next={...updated,updatedAt:new Date().toISOString()};setB(next);setSaving(true);setSaved(false);if(saveTimer.current) clearTimeout(saveTimer.current);saveTimer.current=setTimeout(()=>{onUpdated(next);setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),1800);},700);return next;},[onUpdated]);
+  const patch=(fields)=>save({...b,...fields});
+  const resolveGap=(id)=>{const gaps=b.informationGaps.map(g=>g.id===id?{...g,resolved:true}:g);const still=gaps.filter(g=>g.blocking&&!g.resolved).length>0;patch({informationGaps:gaps,proposalStatus:still?'blocked':'ready'});};
+  const removeGap=(id)=>patch({informationGaps:b.informationGaps.filter(g=>g.id!==id)});
+  const updateUpsell=(id,f,v)=>patch({upsellOpportunities:b.upsellOpportunities.map(u=>u.id===id?{...u,[f]:v}:u)});
+  const handleUpdateApplied=(updated)=>{setB(updated);onUpdated(updated);setShowUpdate(false);};
+  const pricing=calcPricing(b.tier,{...(b.modules||DEFAULT_MODULES),categories:b.productCategories||[]},b.relationshipType);
+  const openGaps=(b.informationGaps||[]).filter(g=>!g.resolved);
+  const blockingGaps=openGaps.filter(g=>g.blocking);
+  const buildCopyText=()=>{
+    const relMap={cold:'Cold / New',referral:'Referral',friends_family:'Friends and Family',returning:'Returning Client'};
+    const today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+    const validLinks=(b.links||[]).filter(l=>l.url&&l.url.trim());
+    return ['SOURCEPOINT - CLIENT INTELLIGENCE BRIEF','Date: '+today,'Client: '+b.clientName+(b.company?' / '+b.company:''),'Tier: '+(b.tier==='corporate'?'Corporate':'Founder')+' | Relationship: '+(relMap[b.relationshipType]||'New'),'Status: '+(b.proposalStatus==='ready'?'Ready to Generate':'Blocked - '+blockingGaps.length+' blocking gap'+(blockingGaps.length!==1?'s':'')),'','CURRENT SITUATION',b.currentSituation||'(not captured)','','STATED GOALS',...(Array.isArray(b.statedGoals)?b.statedGoals.map((g,i)=>'  '+(i+1)+'. '+g.text):[b.statedGoals||'(not captured)']),'',(openGaps.length>0?'INFORMATION GAPS':'ALL REQUIRED INPUTS CONFIRMED'),...openGaps.map(g=>'  ['+(g.blocking?'BLOCKING':'non-blocking')+'] '+g.field+'\n  Ask: '+g.question),'','SCOPE AND FEE',...pricing.lines.map(l=>'  '+l.label+(l.detail?' ('+l.detail+')':'')+': '+fmt(l.amt)),pricing.total>0?'  Total Sourcing Fee: '+fmt(pricing.total):'  No modules selected','  Coordination Fee: 10% of order value plus shipping minimum '+fmt(COORD_MIN),'','',(b.productCategories||[]).length>0?'PRODUCT CATEGORIES':null,...(b.productCategories||[]).flatMap(c=>['  '+c.category+' ('+c.addonTier+')',...(c.skus||[]).map(s=>'    SKU: '+s.sku+(s.quantity?' | Qty: '+s.quantity:'')+(s.phase?' | '+s.phase:'')+(s.notes?' | '+s.notes:''))]),b.analystNotes?'ANALYST NOTES\n'+b.analystNotes:null,validLinks.length>0?'':null,validLinks.length>0?'REFERENCE LINKS':null,...validLinks.map(l=>'  '+(l.label?l.label+': ':'')+l.url),'','SourcePoint | sourcepointco.com | hello@sourcepointco.com'].filter(v=>v!==null&&v!==undefined).join('\n');
+  };
+  return React.createElement('div',{style:{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}},
+    React.createElement('div',{style:{background:'#FFF',borderBottom:'1px solid #E2E8F0',padding:'11px 20px',display:'flex',alignItems:'center',gap:10,flexShrink:0,flexWrap:'wrap'}},
+      React.createElement('div',{style:{flex:1,minWidth:0}},
+        React.createElement(InlineEdit,{value:b.clientName||'Client Name',onSave:v=>patch({clientName:v}),displayStyle:{fontFamily:"'Cinzel',serif",fontSize:15,fontWeight:600,color:'#1A202C'},inputStyle:{fontFamily:"'Cinzel',serif",fontSize:15,fontWeight:600,color:'#1A202C'}}),
+        React.createElement(InlineEdit,{value:b.company||'Company',onSave:v=>patch({company:v}),displayStyle:{fontSize:12,color:'#718096',marginTop:2},inputStyle:{fontSize:12,color:'#718096'}})
+      ),
+      React.createElement(StatusBadge,{status:b.proposalStatus,blockingCount:blockingGaps.length}),
+      React.createElement('select',{value:b.tier,onChange:e=>patch({tier:e.target.value}),style:S.sel},React.createElement('option',{value:'founder'},'Founder'),React.createElement('option',{value:'corporate'},'Corporate')),
+      React.createElement('select',{value:b.relationshipType,onChange:e=>patch({relationshipType:e.target.value}),style:S.sel},React.createElement('option',{value:'cold'},'Cold / New'),React.createElement('option',{value:'referral'},'Referral'),React.createElement('option',{value:'returning'},'Returning')),
+      React.createElement('div',{style:{display:'flex',gap:6}},
+        React.createElement('button',{onClick:downloadWordDoc,disabled:downloading,title:'Download branded Word proposal',style:{border:'1px solid #1A365D',background:downloading?'#E2E8F0':'#1A365D',color:downloading?'#A0AEC0':'#FFF',padding:'6px 12px',fontSize:11,fontFamily:"'Cinzel',serif",letterSpacing:'0.07em',cursor:downloading?'default':'pointer',borderRadius:3,whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:6}},downloading&&React.createElement(Spinner,null),downloading?'GENERATING...':'WORD DOC'),
+        React.createElement('button',{onClick:()=>setShowProposal(true),title:'Generate sourcing proposal',style:{border:'1px solid #065F46',background:'#065F46',color:'#FFF',padding:'6px 12px',fontSize:11,fontFamily:"'Cinzel',serif",letterSpacing:'0.07em',cursor:'pointer',borderRadius:3,whiteSpace:'nowrap'}},'Generate Proposal'),
+        React.createElement(Btn,{onClick:()=>setShowInvoice(true),variant:'invoice'},'Invoice'),
+        React.createElement(Btn,{onClick:()=>setShowUpdate(true),variant:'primary'},'+ Update'),
+        React.createElement(Btn,{onClick:()=>{navigator.clipboard.writeText(buildCopyText());setCopied(true);setTimeout(()=>setCopied(false),2000);}},copied?'Copied':'Copy'),
+        !confirmDelete?React.createElement(Btn,{onClick:()=>setConfirmDelete(true),variant:'danger'},'Delete'):React.createElement('div',{style:{display:'flex',gap:4}},React.createElement(Btn,{onClick:onDeleted,variant:'danger'},'Confirm'),React.createElement(Btn,{onClick:()=>setConfirmDelete(false)},'Cancel'))
+      ),
+      React.createElement('div',{style:{fontSize:10,color:saving?'#F59E0B':saved?'#22C55E':'#CBD5E0',minWidth:60,textAlign:'right',transition:'color 0.2s'}},saving?'Saving...':saved?'Saved':dateFmt(b.updatedAt))
+    ),
+    React.createElement('div',{style:{flex:1,overflowY:'auto',padding:'16px 20px'}},
+      React.createElement('div',{style:{maxWidth:1000,margin:'0 auto',display:'grid',gap:12}},
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:12}},
+          React.createElement(Card,{title:'Current Situation',accentColor:'#0056A8'},React.createElement(EditBlock,{value:b.currentSituation,onSave:v=>patch({currentSituation:v}),placeholder:'Where is this client right now? Click to edit.'})),
+          React.createElement(Card,{title:'Stated Goals',accentColor:'#0056A8'},React.createElement(GoalsList,{goals:Array.isArray(b.statedGoals)?b.statedGoals:normaliseGoals(b.statedGoals),onGoalsChange:goals=>patch({statedGoals:goals})}))
+        ),
+        React.createElement(Card,{title:'Product Categories',accentColor:'#0056A8'},React.createElement(ProductCategoriesTable,{categories:b.productCategories||[],onCategoriesChange:cats=>patch({productCategories:cats})})),
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:12}},
+          React.createElement(Card,{title:'Information Gaps',accentColor:blockingGaps.length>0?'#F59E0B':openGaps.length>0?'#94A3B8':'#22C55E',badge:openGaps.length>0?(blockingGaps.length+' blocking'):'Clear',badgeColor:blockingGaps.length>0?'#FEF3C7':'#ECFDF5',badgeText:blockingGaps.length>0?'#92400E':'#065F46'},
+            (b.informationGaps||[]).length===0?React.createElement('div',{style:{fontSize:12,color:'#A0AEC0',fontStyle:'italic'}},'No gaps identified.'):b.informationGaps.map(g=>React.createElement(GapRow,{key:g.id,gap:g,onResolve:()=>resolveGap(g.id),onRemove:()=>removeGap(g.id)})),
+            React.createElement('button',{onClick:()=>{const f=prompt('Gap field name:');const q=prompt('Question to ask:');if(f&&q)patch({informationGaps:[...(b.informationGaps||[]),{id:uid(),field:f,question:q,blocking:false,resolved:false}]});},style:{marginTop:9,background:'none',border:'1px dashed #CBD5E0',color:'#A0AEC0',padding:'5px 10px',fontSize:11,borderRadius:2,cursor:'pointer',width:'100%'}},'+ Add Gap')
+          ),
+          React.createElement(Card,{title:'Upsell Opportunities',accentColor:'#7C3AED'},
+            (b.upsellOpportunities||[]).length===0?React.createElement('div',{style:{fontSize:12,color:'#A0AEC0',fontStyle:'italic'}},'No upsell opportunities identified.'):b.upsellOpportunities.map(opp=>React.createElement(UpsellRow,{key:opp.id,opp,onChange:(f,v)=>updateUpsell(opp.id,f,v)}))
+          )
+        ),
+        React.createElement(Card,{title:'Scope and Fee',accentColor:'#0056A8'},React.createElement(ScopeMatrix,{tier:b.tier,mods:b.modules||DEFAULT_MODULES,rel:b.relationshipType,pricing,onModChange:mods=>patch({modules:{...(b.modules||DEFAULT_MODULES),...mods}})})),
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:12}},
+          React.createElement(Card,{title:'Analyst Notes',accentColor:'#4A5568'},React.createElement(EditBlock,{value:b.analystNotes,onSave:v=>patch({analystNotes:v}),placeholder:'Strategic observations, red flags, buying signals. Click to add.'})),
+          React.createElement(Card,{title:'Attachments and Links',accentColor:'#94A3B8'},
+            (b.attachmentNames||[]).length>0&&React.createElement('div',{style:{marginBottom:14}},
+              React.createElement('div',{style:S.slbl},'Files used in analysis'),
+              React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:5,marginBottom:6}},b.attachmentNames.map((f,i)=>React.createElement('div',{key:i,style:{background:'#F7FAFC',border:'1px solid #E2E8F0',borderRadius:2,padding:'3px 9px',fontSize:11,color:'#4A5568',display:'flex',alignItems:'center',gap:5,maxWidth:220}},React.createElement('span',null,f.kind==='meeting-note-photo'?'note':f.kind==='image'?'img':f.kind==='pdf'?'pdf':'txt'),React.createElement('span',{style:{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}},f.name),React.createElement('span',{style:{color:'#A0AEC0',fontSize:10,flexShrink:0}},fmtSize(f.size))))),
+              React.createElement('p',{style:{fontSize:10,color:'#A0AEC0'}},'File content not stored. Re-upload via Update to re-analyze.')
+            ),
+            React.createElement('div',{style:S.slbl},'Website Links'),
+            React.createElement(LinksSection,{links:b.links||[],onLinksChange:links=>patch({links}),disabled:false})
+          )
+        ),
+        (b.history||[]).length>0&&React.createElement('div',{style:{fontSize:10,color:'#A0AEC0',display:'flex',gap:14,flexWrap:'wrap'}},React.createElement('span',{style:{fontWeight:700,color:'#CBD5E0'}},'History:'),b.history.map((h,i)=>React.createElement('span',{key:i},dateFmt(h.date)+' - '+h.note)))
+      )
+    ),
+    showUpdate&&React.createElement(UpdateModal,{brief:b,apiKey,onApply:handleUpdateApplied,onClose:()=>setShowUpdate(false)}),
+    showProposal&&React.createElement(ProposalModal,{brief:b,pricing,apiKey,onClose:()=>setShowProposal(false)}),
+    showInvoice&&React.createElement(InvoiceModal,{brief:b,pricing,onClose:()=>setShowInvoice(false)})
+  );
+}
+
+function App(){
+  const [apiKey,setApiKeyState]=useState(()=>getApiKey());const [index,setIndex]=useState([]);const [activeBrief,setActiveBrief]=useState(null);const [view,setView]=useState('home');const [sidebarOpen,setSidebarOpen]=useState(true);const [showSettings,setShowSettings]=useState(false);
+  useEffect(()=>{if(apiKey)setIndex(loadIdx());},[apiKey]);
+  const handleSaveKey=(k)=>{saveApiKey(k);setApiKeyState(k);setIndex(loadIdx());};
+  const openBrief=(id)=>{const b=loadBrief(id);if(b){setActiveBrief(b);setView('brief');}};
+  const handleSaved=(b)=>{const ni=saveBrief(b,index);setIndex(ni);setActiveBrief(b);setView('brief');};
+  const handleUpdated=(b)=>{const ni=saveBrief(b,index);setIndex(ni);setActiveBrief(b);};
+  const handleDelete=(id)=>{const ni=delBrief(id,index);setIndex(ni);setActiveBrief(null);setView('home');};
+  if(!apiKey) return React.createElement(SetupView,{onSave:handleSaveKey});
+  return React.createElement('div',{style:{display:'flex',height:'100vh',overflow:'hidden',background:'#F0F2F5'}},
+    React.createElement(Sidebar,{open:sidebarOpen,onToggle:()=>setSidebarOpen(o=>!o),index,activeBriefId:activeBrief&&activeBrief.id,onSelect:openBrief,onNew:()=>{setActiveBrief(null);setView('new');},onSettings:()=>setShowSettings(true)}),
+    React.createElement('div',{style:{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}},
+      view==='home'&&React.createElement(HomeView,{onNew:()=>setView('new'),hasAny:index.length>0}),
+      view==='new'&&React.createElement(NewBriefView,{apiKey,onSaved:handleSaved,onCancel:()=>setView('home')}),
+      view==='brief'&&activeBrief&&React.createElement(BriefView,{key:activeBrief.id,initialBrief:activeBrief,apiKey,onUpdated:handleUpdated,onDeleted:()=>handleDelete(activeBrief.id)})
+    ),
+    showSettings&&React.createElement(SettingsModal,{currentKey:apiKey,onSave:(k)=>{handleSaveKey(k);setShowSettings(false);},onClose:()=>setShowSettings(false)})
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App,null));
+</script>
+</body>
+</html>
