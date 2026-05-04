@@ -195,6 +195,34 @@ const saveBrief=(brief,idx)=>{
   }catch(e){return idx;}
 };
 const delBrief=(id,idx)=>{try{localStorage.removeItem(bKey(id));const ni=idx.filter(b=>b.id!==id);localStorage.setItem(IDX_KEY,JSON.stringify(ni));return ni;}catch{return idx;}};
+const exportAllBriefs=()=>{
+  const idx=loadIdx();
+  const briefs=idx.map(meta=>loadBrief(meta.id)).filter(Boolean);
+  const payload={exportedAt:new Date().toISOString(),version:'sp-briefs-v1',briefs};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='sourcepoint-briefs-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+  URL.revokeObjectURL(url);
+};
+const importBriefs=(file,onDone)=>{
+  const reader=new FileReader();
+  reader.onload=(e)=>{
+    try{
+      const payload=JSON.parse(e.target.result);
+      const briefs=payload.briefs||[];
+      let idx=loadIdx();
+      briefs.forEach(b=>{
+        if(!b||!b.id) return;
+        idx=saveBrief(b,idx);
+      });
+      onDone(idx.length+' briefs restored successfully.');
+    }catch(err){onDone('Import failed: invalid backup file.');}
+  };
+  reader.readAsText(file);
+};
 const getApiKey=()=>localStorage.getItem('sp-api-key')||'';
 const saveApiKey=(k)=>localStorage.setItem('sp-api-key',k.trim());
 const getPmt=()=>{try{return JSON.parse(localStorage.getItem('sp-pmt')||'{}');}catch{return{};}};
@@ -763,7 +791,14 @@ function Sidebar({open,onToggle,index,activeBriefId,onSelect,onNew,onSettings}){
           )
         ))
     ),
-    React.createElement('div',{style:{padding:'9px 8px',borderTop:'1px solid rgba(255,255,255,0.07)'}},
+    React.createElement('div',{style:{padding:'9px 8px',borderTop:'1px solid rgba(255,255,255,0.07)',display:'flex',flexDirection:'column',gap:4}},
+      React.createElement('button',{onClick:exportAllBriefs,title:'Export Backup',style:{width:'100%',background:'none',border:'none',color:'rgba(255,255,255,0.45)',cursor:'pointer',padding:6,display:'flex',alignItems:'center',gap:7,justifyContent:open?'flex-start':'center',fontSize:11,fontFamily:"'Open Sans',sans-serif",borderRadius:2}},
+        React.createElement('span',{style:{fontSize:13}},'↓'),open&&'Export Backup'
+      ),
+      React.createElement('label',{title:'Import Backup',style:{width:'100%',background:'none',border:'none',color:'rgba(255,255,255,0.45)',cursor:'pointer',padding:6,display:'flex',alignItems:'center',gap:7,justifyContent:open?'flex-start':'center',fontSize:11,fontFamily:"'Open Sans',sans-serif",borderRadius:2}},
+        React.createElement('span',{style:{fontSize:13}},'↑'),open&&'Import Backup',
+        React.createElement('input',{type:'file',accept:'.json',style:{display:'none'},onChange:(e)=>{const f=e.target.files[0];if(f) importBriefs(f,(msg)=>{alert(msg);window.location.reload();});e.target.value='';}})
+      ),
       React.createElement('button',{onClick:onSettings,title:'Settings',style:{width:'100%',background:'none',border:'none',color:'rgba(255,255,255,0.3)',cursor:'pointer',padding:6,display:'flex',alignItems:'center',gap:7,justifyContent:open?'flex-start':'center',fontSize:11,fontFamily:"'Open Sans',sans-serif",borderRadius:2}},
         React.createElement('span',{style:{fontSize:13}},'o'),open&&'Settings'
       )
